@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "방구석 플레이리스트",
+    "slug": "playlist",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.playlist.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다."
+      }
+    },
+    "android": {
+      "package": "com.playlist.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다."
+        }
+      ]
+    ]
+  }
+}
