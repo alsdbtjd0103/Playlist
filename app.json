@@ -4,16 +4,23 @@
     "slug": "playlist",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0f0f0f",
+    "splash": {
+      "backgroundColor": "#0f0f0f"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.playlist.app",
+      "backgroundColor": "#0f0f0f",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다."
+        "NSMicrophoneUsageDescription": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다.",
+        "UIBackgroundModes": []
       }
     },
     "android": {
       "package": "com.playlist.app",
+      "backgroundColor": "#0f0f0f",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]

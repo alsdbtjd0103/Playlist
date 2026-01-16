@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { Ionicons } from '@expo/vector-icons';
 import type { Song, Version } from '../types';
+import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
 interface PlaylistPlayerProps {
   playlist: { song: Song; version: Version }[];
@@ -95,52 +97,77 @@ export default function PlaylistPlayer({
 
   return (
     <View style={styles.container}>
+      {/* 앨범 아트 */}
+      <View style={styles.albumArt}>
+        <Ionicons name="musical-notes" size={48} color={colors.textSecondary} />
+      </View>
+
+      {/* 곡 정보 */}
       <View style={styles.songInfo}>
-        <Text style={styles.songTitle}>{currentItem.song.title}</Text>
+        <Text style={styles.songTitle} numberOfLines={1}>{currentItem.song.title}</Text>
         {currentItem.song.artist && (
-          <Text style={styles.songArtist}>{currentItem.song.artist}</Text>
+          <Text style={styles.songArtist} numberOfLines={1}>{currentItem.song.artist}</Text>
         )}
-        <Text style={styles.trackInfo}>
-          {currentIndex + 1} / {playlist.length}
-        </Text>
+        <View style={styles.trackIndicator}>
+          <Ionicons name="disc-outline" size={14} color={colors.textTertiary} />
+          <Text style={styles.trackInfo}>
+            {currentIndex + 1} / {playlist.length}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+      {/* 프로그레스 바 */}
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          <View style={[styles.progressThumb, { left: `${progress}%` }]} />
+        </View>
+        <View style={styles.timeInfo}>
+          <Text style={styles.timeText}>{formatTime(position)}</Text>
+          <Text style={styles.timeText}>{formatTime(duration)}</Text>
+        </View>
       </View>
 
-      <View style={styles.timeInfo}>
-        <Text style={styles.timeText}>{formatTime(position)}</Text>
-        <Text style={styles.timeText}>{formatTime(duration)}</Text>
-      </View>
-
+      {/* 컨트롤 버튼 */}
       <View style={styles.controls}>
         <TouchableOpacity
-          style={[styles.controlButton, currentIndex === 0 && styles.controlButtonDisabled]}
+          style={[styles.secondaryButton, currentIndex === 0 && styles.disabledButton]}
           onPress={handlePrevious}
           disabled={currentIndex === 0}
         >
-          <Text style={styles.controlButtonText}>⏮</Text>
+          <Ionicons
+            name="play-skip-back"
+            size={24}
+            color={currentIndex === 0 ? colors.textTertiary : colors.textSecondary}
+          />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.controlButton, styles.playButton]}
+          style={styles.playButton}
           onPress={handlePlayPause}
+          activeOpacity={0.8}
         >
-          <Text style={styles.playButtonText}>
-            {status.playing ? '⏸' : '▶️'}
-          </Text>
+          <Ionicons
+            name={status.playing ? 'pause' : 'play'}
+            size={32}
+            color={colors.background}
+            style={status.playing ? {} : { marginLeft: 4 }}
+          />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[
-            styles.controlButton,
-            currentIndex === playlist.length - 1 && styles.controlButtonDisabled,
+            styles.secondaryButton,
+            currentIndex === playlist.length - 1 && styles.disabledButton,
           ]}
           onPress={handleNext}
           disabled={currentIndex === playlist.length - 1}
         >
-          <Text style={styles.controlButtonText}>⏭</Text>
+          <Ionicons
+            name="play-skip-forward"
+            size={24}
+            color={currentIndex === playlist.length - 1 ? colors.textTertiary : colors.textSecondary}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -149,81 +176,104 @@ export default function PlaylistPlayer({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  albumArt: {
+    width: 120,
+    height: 120,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
   songInfo: {
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
+    width: '100%',
   },
   songTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    ...typography.h3,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   songArtist: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...typography.body,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
+  trackIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
   trackInfo: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 4,
+    ...typography.caption,
+    color: colors.textTertiary,
+  },
+  progressContainer: {
+    width: '100%',
+    gap: spacing.sm,
   },
   progressBar: {
     height: 4,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 2,
-    overflow: 'hidden',
+    backgroundColor: colors.surfaceLighter,
+    borderRadius: borderRadius.full,
+    overflow: 'visible',
+    position: 'relative',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#000',
+    backgroundColor: colors.textPrimary,
+    borderRadius: borderRadius.full,
+  },
+  progressThumb: {
+    position: 'absolute',
+    top: -4,
+    width: 12,
+    height: 12,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.textPrimary,
+    marginLeft: -6,
   },
   timeInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   timeText: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...typography.caption,
+    color: colors.textTertiary,
     fontVariant: ['tabular-nums'],
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
-    marginTop: 8,
+    gap: spacing.xl,
+    marginTop: spacing.sm,
   },
-  controlButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+  secondaryButton: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  controlButtonDisabled: {
-    opacity: 0.3,
-  },
-  controlButtonText: {
-    fontSize: 20,
+  disabledButton: {
+    opacity: 0.4,
   },
   playButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#000',
-    borderColor: '#000',
-  },
-  playButtonText: {
-    fontSize: 24,
-    color: '#fff',
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

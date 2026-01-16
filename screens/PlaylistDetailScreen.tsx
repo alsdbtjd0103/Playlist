@@ -12,9 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, Song, Version } from '../types';
 import { getPlaylistWithDetails, removeFromPlaylist } from '../lib/database';
 import PlaylistPlayer from '../components/PlaylistPlayer';
+import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaylistDetail'>;
 
@@ -29,7 +31,6 @@ interface PlaylistItem {
 export default function PlaylistDetailScreen({ navigation, route }: Props) {
   const { playlistId } = route.params;
   const [playlist, setPlaylist] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useFocusEffect(
@@ -44,9 +45,6 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
       setPlaylist(data);
     } catch (error) {
       console.error('플레이리스트 로드 실패:', error);
-      Alert.alert('오류', '플레이리스트를 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -86,46 +84,34 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
       style={[styles.trackItem, index === currentIndex && styles.trackItemActive]}
       onPress={() => setCurrentIndex(index)}
       onLongPress={() => handleRemoveItem(item)}
+      activeOpacity={0.7}
     >
-      <View style={styles.trackNumber}>
-        <Text style={[styles.trackNumberText, index === currentIndex && styles.trackNumberTextActive]}>
-          {index + 1}
-        </Text>
+      <View style={[styles.trackNumber, index === currentIndex && styles.trackNumberActive]}>
+        {index === currentIndex ? (
+          <Ionicons name="musical-note" size={14} color={colors.textPrimary} />
+        ) : (
+          <Text style={styles.trackNumberText}>{index + 1}</Text>
+        )}
       </View>
       <View style={styles.trackInfo}>
-        <Text style={[styles.trackTitle, index === currentIndex && styles.trackTitleActive]}>
+        <Text style={[styles.trackTitle, index === currentIndex && styles.trackTitleActive]} numberOfLines={1}>
           {item.song.title}
         </Text>
         {item.song.artist && (
-          <Text style={styles.trackArtist}>{item.song.artist}</Text>
+          <Text style={styles.trackArtist} numberOfLines={1}>{item.song.artist}</Text>
         )}
       </View>
       <View style={styles.trackRating}>
-        <Text style={styles.ratingStar}>★</Text>
+        <Ionicons name="star" size={14} color={colors.warning} />
         <Text style={styles.ratingText}>{item.version.rating}</Text>
       </View>
     </TouchableOpacity>
   );
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#000" />
-        <Text style={styles.loadingText}>로딩 중...</Text>
-      </View>
-    );
-  }
-
   if (!playlist) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>플레이리스트를 찾을 수 없습니다</Text>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>← 돌아가기</Text>
-        </TouchableOpacity>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -137,31 +123,26 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerBackButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.headerBackButtonText}>← 뒤로</Text>
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.title}>{playlist.name}</Text>
-          {playlist.description && (
-            <Text style={styles.description}>{playlist.description}</Text>
-          )}
-          <Text style={styles.trackCount}>{playlist.items.length}개 트랙</Text>
+        <View style={styles.logo}>
+          <Ionicons name="musical-notes" size={20} color={colors.primary} />
+          <Text style={styles.logoText}>Playlist</Text>
         </View>
       </View>
 
       {playlist.items.length === 0 ? (
         <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="disc-outline" size={64} color={colors.textTertiary} />
+          </View>
           <Text style={styles.emptyTitle}>플레이리스트가 비어있습니다</Text>
           <Text style={styles.emptySubtitle}>
-            곡의 대표 버전을 설정하면 자동으로 추가됩니다.
+            곡의 대표 버전을 설정하면{'\n'}자동으로 추가됩니다
           </Text>
         </View>
       ) : (
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.playerSection}>
             <PlaylistPlayer
               playlist={playlistData}
@@ -171,7 +152,6 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
           </View>
 
           <View style={styles.trackListSection}>
-            <Text style={styles.sectionTitle}>트랙 목록</Text>
             <FlatList
               data={playlist.items}
               renderItem={renderTrackItem}
@@ -189,160 +169,140 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: spacing.xxl,
+    backgroundColor: colors.background,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
+    marginTop: spacing.md,
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  errorIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   errorText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 16,
-  },
-  backButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#000',
+    ...typography.h3,
+    color: colors.textSecondary,
   },
   header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
-    gap: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  headerBackButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+  logo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
-  headerBackButtonText: {
-    fontSize: 16,
-    color: '#000',
-  },
-  headerInfo: {
-    gap: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  description: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  trackCount: {
-    fontSize: 14,
-    color: '#9ca3af',
-    marginTop: 4,
+  logoText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
   },
   content: {
     flex: 1,
   },
   playerSection: {
-    padding: 16,
+    padding: spacing.lg,
   },
   trackListSection: {
-    padding: 16,
+    padding: spacing.lg,
     paddingTop: 0,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
   trackList: {
-    gap: 8,
+    gap: spacing.sm,
   },
   trackItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 8,
-    gap: 12,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    gap: spacing.md,
   },
   trackItemActive: {
-    backgroundColor: '#f3f4f6',
-    borderColor: '#000',
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.textPrimary,
   },
   trackNumber: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f3f4f6',
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  trackNumberText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
+  trackNumberActive: {
+    backgroundColor: colors.surfaceLighter,
   },
-  trackNumberTextActive: {
-    color: '#000',
+  trackNumberText: {
+    ...typography.bodySmall,
+    fontWeight: '600',
+    color: colors.textTertiary,
   },
   trackInfo: {
     flex: 1,
+    gap: 2,
   },
   trackTitle: {
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '500',
-    marginBottom: 2,
+    color: colors.textPrimary,
   },
   trackTitleActive: {
-    fontWeight: 'bold',
+    color: colors.textPrimary,
+    fontWeight: '600',
   },
   trackArtist: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   trackRating: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  ratingStar: {
-    color: '#fbbf24',
-    fontSize: 14,
+    gap: spacing.xs,
   },
   ratingText: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: spacing.xxl,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
   emptyTitle: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 8,
+    ...typography.h3,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: '#999',
+    ...typography.bodySmall,
+    color: colors.textTertiary,
     textAlign: 'center',
+    lineHeight: 20,
   },
 });

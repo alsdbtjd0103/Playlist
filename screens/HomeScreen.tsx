@@ -9,22 +9,90 @@ import {
   Modal,
   TextInput,
   Alert,
+  Platform,
+  ActionSheetIOS,
+  GestureResponderEvent,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList, SongWithVersions } from "../types";
-import { getAllSongs, addSong, getVersionsBySong } from "../lib/database";
+import { getAllSongs, addSong, getVersionsBySong, deleteSong } from "../lib/database";
 import { useFocusEffect } from "@react-navigation/native";
+import { colors, spacing, borderRadius, typography } from "../lib/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
+const SongItem = ({
+  item,
+  onOpenMenu,
+  onPress,
+}: {
+  item: SongWithVersions;
+  onOpenMenu: (x: number, y: number, song: SongWithVersions) => void;
+  onPress: () => void;
+}) => {
+  const buttonRef = React.useRef<View>(null);
+  const displayVersion = item.defaultVersion || item.latestVersion;
+
+  const handlePress = () => {
+    buttonRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+      onOpenMenu(pageX + width, pageY + height, item);
+    });
+  };
+
+  return (
+    <TouchableOpacity style={styles.songCard} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.songThumbnail}>
+        <Ionicons name="musical-notes" size={24} color={colors.textSecondary} />
+      </View>
+      <View style={styles.songCardContent}>
+        <View style={styles.songInfo}>
+          <Text style={styles.songTitle} numberOfLines={1}>
+            {item.title}
+          </Text>
+          {item.artist && (
+            <Text style={styles.songArtist} numberOfLines={1}>
+              {item.artist}
+            </Text>
+          )}
+        </View>
+        {displayVersion && (
+          <View style={styles.ratingContainer}>
+            <Ionicons name="star" size={12} color={colors.warning} />
+            <Text style={styles.ratingText}>{displayVersion.rating}</Text>
+          </View>
+        )}
+      </View>
+      <TouchableOpacity
+        ref={buttonRef}
+        style={styles.moreButton}
+        onPress={handlePress}
+      >
+        <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+};
+
 export default function HomeScreen({ navigation }: Props) {
-  const [songs, setSongs] = useState<SongWithVersions[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [songs, setSongs] = useState<SongWithVersions[] | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [adding, setAdding] = useState(false);
+  const [menuState, setMenuState] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    song: SongWithVersions | null;
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    song: null,
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -55,9 +123,6 @@ export default function HomeScreen({ navigation }: Props) {
       setSongs(songsWithVersions);
     } catch (error) {
       console.error("곡 목록 로드 실패:", error);
-      Alert.alert("오류", "곡 목록을 불러오는데 실패했습니다.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -82,41 +147,57 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
-  const renderSongCard = ({ item }: { item: SongWithVersions }) => {
-    const versionCount = item.versions?.length || 0;
-    const displayVersion = item.defaultVersion || item.latestVersion;
-
-    return (
-      <TouchableOpacity
-        style={styles.songCard}
-        onPress={() => navigation.navigate("SongDetail", { songId: item.id })}
-      >
-        <View style={styles.songCardContent}>
-          <View style={styles.songInfo}>
-            <Text style={styles.songTitle}>{item.title}</Text>
-            {item.artist && (
-              <Text style={styles.songArtist}>{item.artist}</Text>
-            )}
-          </View>
-          <View style={styles.songStats}>
-            <Text style={styles.versionCount}>{versionCount}개 버전</Text>
-            {displayVersion && (
-              <View style={styles.ratingContainer}>
-                <Text style={styles.ratingStar}>★</Text>
-                <Text style={styles.ratingText}>{displayVersion.rating}/5</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
+  const handleDeleteSong = (song: SongWithVersions) => {
+    closeMenu();
+    Alert.alert(
+      "곡 삭제",
+      `"${song.title}"을(를) 삭제하시겠습니까?\n모든 녹음 버전도 함께 삭제됩니다.`, // Note: The original string had a newline character that was correctly escaped as \n. This is preserved.
+      [
+        { text: "취소", style: "cancel" },
+        {
+          text: "삭제",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteSong(song.id);
+              await fetchSongs();
+            } catch (error) {
+              console.error("곡 삭제 실패:", error);
+              Alert.alert("오류", "곡 삭제에 실패했습니다.");
+            }
+          },
+        },
+      ]
     );
   };
 
-  if (loading) {
+  const handleOpenMenu = (x: number, y: number, song: SongWithVersions) => {
+    setMenuState({
+      visible: true,
+      x: x - 120, // 메뉴 너비(140) - 버튼 너비(약 40) + 여유 공간
+      y: y,
+      song,
+    });
+  };
+
+  const closeMenu = () => {
+    setMenuState((prev) => ({ ...prev, visible: false }));
+  };
+
+  const renderSongCard = ({ item }: { item: SongWithVersions }) => {
+    return (
+      <SongItem
+        item={item}
+        onOpenMenu={handleOpenMenu}
+        onPress={() => navigation.navigate("SongDetail", { songId: item.id })}
+      />
+    );
+  };
+
+  if (songs === null) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#000" />
-        <Text style={styles.loadingText}>로딩 중...</Text>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -124,32 +205,31 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>방구석 플레이리스트</Text>
-          <Text style={styles.subtitle}>
-            나만의 노래방 플레이리스트를 관리하세요
-          </Text>
+        <View style={styles.logo}>
+          <Ionicons name="musical-notes" size={20} color={colors.primary} />
+          <Text style={styles.logoText}>Playlist</Text>
         </View>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={styles.outlineButton}
-            onPress={() => navigation.navigate("Playlists")}
-          >
-            <Text style={styles.outlineButtonText}>📝</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => setModalVisible(true)}
-          >
-            <Text style={styles.primaryButtonText}>+ 새 곡 추가</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() => setModalVisible(true)}
+        >
+          <Ionicons name="add" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       {songs.length === 0 ? (
         <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="musical-notes-outline" size={64} color={colors.textTertiary} />
+          </View>
           <Text style={styles.emptyTitle}>아직 등록된 곡이 없습니다</Text>
           <Text style={styles.emptySubtitle}>첫 번째 곡을 추가해보세요!</Text>
+          <TouchableOpacity
+            style={styles.emptyAddButton}
+            onPress={() => setModalVisible(true)}
+          >
+            <Ionicons name="add" size={24} color={colors.background} />
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -157,7 +237,34 @@ export default function HomeScreen({ navigation }: Props) {
           renderItem={renderSongCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
         />
+      )}
+
+      {/* 곡 추가 모달 */}
+      {/* 드롭다운 메뉴 (Modal 대신 절대 위치 View 사용) */}
+      {menuState.visible && (
+        <TouchableWithoutFeedback onPress={closeMenu}>
+          <View style={[styles.menuOverlay, StyleSheet.absoluteFill]}>
+            <View
+              style={[
+                styles.dropdownMenu,
+                {
+                  top: menuState.y,
+                  left: menuState.x,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => menuState.song && handleDeleteSong(menuState.song)}
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+                <Text style={styles.menuItemText}>삭제</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
       )}
 
       {/* 곡 추가 모달 */}
@@ -169,31 +276,41 @@ export default function HomeScreen({ navigation }: Props) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>새 곡 추가</Text>
-            <Text style={styles.modalSubtitle}>
-              부를 곡의 정보를 입력하세요.
-            </Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>새 곡</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>곡 제목 *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="예: 좋은날"
-                value={title}
-                onChangeText={setTitle}
-                editable={!adding}
-              />
+              <Text style={styles.inputLabel}>곡 제목</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="musical-note" size={20} color={colors.textTertiary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="예: 좋은날"
+                  placeholderTextColor={colors.textTertiary}
+                  value={title}
+                  onChangeText={setTitle}
+                  editable={!adding}
+                />
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>아티스트 (선택)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="예: 아이유"
-                value={artist}
-                onChangeText={setArtist}
-                editable={!adding}
-              />
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person" size={20} color={colors.textTertiary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="예: 아이유"
+                  placeholderTextColor={colors.textTertiary}
+                  value={artist}
+                  onChangeText={setArtist}
+                  editable={!adding}
+                />
+              </View>
             </View>
 
             <View style={styles.modalButtons}>
@@ -205,12 +322,12 @@ export default function HomeScreen({ navigation }: Props) {
                 <Text style={styles.cancelButtonText}>취소</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
+                style={[styles.modalButton, styles.confirmButton, !title.trim() && styles.disabledButton]}
                 onPress={handleAddSong}
                 disabled={adding || !title.trim()}
               >
                 {adding ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={colors.background} size="small" />
                 ) : (
                   <Text style={styles.confirmButtonText}>추가</Text>
                 )}
@@ -226,182 +343,233 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: colors.background,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#666",
+    marginTop: spacing.md,
+    fontSize: typography.body.fontSize,
+    color: colors.textSecondary,
   },
   header: {
-    padding: 16,
-    gap: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#666",
-  },
-  headerButtons: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  outlineButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-  },
-  outlineButtonText: {
-    fontSize: 16,
-  },
-  primaryButton: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: "#000",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  listContainer: {
-    padding: 16,
-    gap: 12,
-  },
-  songCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
-    overflow: "hidden",
-  },
-  songCardContent: {
-    padding: 16,
-  },
-  songInfo: {
-    marginBottom: 12,
-  },
-  songTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  songArtist: {
-    fontSize: 14,
-    color: "#666",
-  },
-  songStats: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  versionCount: {
-    fontSize: 14,
-    color: "#666",
+  logo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  logoText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  listContainer: {
+    padding: spacing.lg,
+    paddingTop: 0,
+    gap: spacing.sm,
+  },
+  songCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  songThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceLight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  songCardContent: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  songInfo: {
+    gap: 2,
+  },
+  songTitle: {
+    ...typography.body,
+    fontWeight: "600",
+    color: colors.textPrimary,
+  },
+  songArtist: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
   },
   ratingContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-  },
-  ratingStar: {
-    color: "#fbbf24",
-    fontSize: 14,
+    gap: spacing.xs,
   },
   ratingText: {
-    fontSize: 14,
-    color: "#666",
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  moreButton: {
+    padding: spacing.sm,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 32,
+    padding: spacing.xxl,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.xl,
   },
   emptyTitle: {
-    fontSize: 18,
-    color: "#666",
-    marginBottom: 8,
+    ...typography.h3,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: "#999",
+    ...typography.bodySmall,
+    color: colors.textTertiary,
+    marginBottom: spacing.xl,
+  },
+  emptyAddButton: {
+    width: 56,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: colors.overlay,
+    justifyContent: "flex-end",
   },
   modalContent: {
-    width: "90%",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.xl,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 24,
+    ...typography.h3,
+    color: colors.textPrimary,
   },
   inputContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   inputLabel: {
-    fontSize: 14,
+    ...typography.bodySmall,
     fontWeight: "500",
-    marginBottom: 8,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  inputIcon: {
+    marginLeft: spacing.md,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    flex: 1,
+    padding: spacing.md,
+    fontSize: typography.body.fontSize,
+    color: colors.textPrimary,
   },
   modalButtons: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 8,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surfaceLight,
   },
   cancelButtonText: {
-    color: "#374151",
-    fontSize: 16,
+    color: colors.textPrimary,
+    fontSize: typography.body.fontSize,
     fontWeight: "600",
   },
   confirmButton: {
-    backgroundColor: "#000",
+    backgroundColor: colors.primary,
   },
   confirmButtonText: {
-    color: "#fff",
-    fontSize: 16,
+    color: colors.background,
+    fontSize: typography.body.fontSize,
     fontWeight: "600",
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  dropdownMenu: {
+    position: "absolute",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.xs,
+    width: 140,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  menuItemText: {
+    ...typography.bodySmall,
+    color: colors.error,
+    fontWeight: "500",
   },
 });

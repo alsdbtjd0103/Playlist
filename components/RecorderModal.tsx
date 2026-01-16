@@ -10,7 +10,9 @@ import {
   Alert,
   Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRecording } from '../hooks/useRecording';
+import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
 interface RecorderModalProps {
   visible: boolean;
@@ -35,7 +37,6 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
   const [memo, setMemo] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // 모달이 열릴 때 권한 상태 확인
   useEffect(() => {
     if (visible) {
       checkPermissions();
@@ -79,23 +80,22 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>녹음하기</Text>
-          <Text style={styles.modalSubtitle}>
-            {checkingPermission
-              ? '권한을 확인하는 중...'
-              : permissionStatus === 'denied'
-              ? '마이크 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.'
-              : isRecording
-              ? '녹음 중입니다. 완료되면 정지 버튼을 누르세요.'
-              : audioUri
-              ? '녹음이 완료되었습니다. 평가 후 저장하세요.'
-              : '녹음 버튼을 눌러 시작하세요.'}
-          </Text>
+          {/* 헤더 */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>녹음</Text>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
 
           <View style={styles.recorderContainer}>
+            {/* 권한 거부 상태 */}
             {permissionStatus === 'denied' && !audioUri && (
               <View style={styles.permissionDeniedContainer}>
-                <Text style={styles.permissionDeniedIcon}>🔒</Text>
+                <View style={styles.permissionIconContainer}>
+                  <Ionicons name="mic-off" size={48} color={colors.error} />
+                </View>
                 <Text style={styles.permissionDeniedText}>
                   마이크 권한이 필요합니다
                 </Text>
@@ -106,25 +106,31 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                   style={styles.settingsButton}
                   onPress={() => Linking.openSettings()}
                 >
+                  <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
                   <Text style={styles.settingsButtonText}>설정으로 이동</Text>
                 </TouchableOpacity>
               </View>
             )}
 
+            {/* 녹음 시작 버튼 */}
             {permissionStatus !== 'denied' && !audioUri && !isRecording && (
-              <TouchableOpacity
-                style={styles.startButton}
-                onPress={startRecording}
-                disabled={checkingPermission}
-              >
-                {checkingPermission ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.startButtonText}>🎤 녹음 시작</Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.startContainer}>
+                <TouchableOpacity
+                  style={styles.startButton}
+                  onPress={startRecording}
+                  disabled={checkingPermission}
+                  activeOpacity={0.8}
+                >
+                  {checkingPermission ? (
+                    <ActivityIndicator color={colors.textPrimary} size="large" />
+                  ) : (
+                    <Ionicons name="mic" size={48} color={colors.background} />
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
 
+            {/* 녹음 중 */}
             {isRecording && (
               <View style={styles.recordingContainer}>
                 <View style={styles.recordingIndicator}>
@@ -135,16 +141,21 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                 <TouchableOpacity
                   style={styles.stopButton}
                   onPress={stopRecording}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.stopButtonText}>⏹ 녹음 정지</Text>
+                  <Ionicons name="stop" size={32} color={colors.textPrimary} />
                 </TouchableOpacity>
               </View>
             )}
 
+            {/* 녹음 완료 - 리뷰 */}
             {audioUri && !isRecording && (
               <View style={styles.reviewContainer}>
+                <View style={styles.completedIcon}>
+                  <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+                </View>
+
                 <View style={styles.ratingSection}>
-                  <Text style={styles.ratingLabel}>별점</Text>
                   <View style={styles.ratingStars}>
                     {[1, 2, 3, 4, 5].map((star) => (
                       <TouchableOpacity
@@ -152,30 +163,35 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                         onPress={() => setRating(star)}
                         style={styles.starButton}
                       >
-                        <Text style={styles.starText}>
-                          {star <= rating ? '★' : '☆'}
-                        </Text>
+                        <Ionicons
+                          name={star <= rating ? 'star' : 'star-outline'}
+                          size={36}
+                          color={colors.warning}
+                        />
                       </TouchableOpacity>
                     ))}
                   </View>
                 </View>
 
                 <View style={styles.memoSection}>
-                  <Text style={styles.memoLabel}>메모 (선택)</Text>
-                  <TextInput
-                    style={styles.memoInput}
-                    placeholder="이 녹음에 대한 메모를 입력하세요"
-                    value={memo}
-                    onChangeText={setMemo}
-                    multiline
-                    numberOfLines={3}
-                    editable={!saving}
-                  />
+                  <View style={styles.memoInputWrapper}>
+                    <TextInput
+                      style={styles.memoInput}
+                      placeholder="이 녹음에 대한 메모를 입력하세요"
+                      placeholderTextColor={colors.textTertiary}
+                      value={memo}
+                      onChangeText={setMemo}
+                      multiline
+                      numberOfLines={3}
+                      editable={!saving}
+                    />
+                  </View>
                 </View>
               </View>
             )}
           </View>
 
+          {/* 하단 버튼 */}
           <View style={styles.modalButtons}>
             {audioUri ? (
               <>
@@ -192,18 +208,21 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                   disabled={saving}
                 >
                   {saving ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={colors.background} size="small" />
                   ) : (
-                    <Text style={styles.confirmButtonText}>저장</Text>
+                    <>
+                      <Ionicons name="checkmark" size={20} color={colors.background} />
+                      <Text style={styles.confirmButtonText}>저장</Text>
+                    </>
                   )}
                 </TouchableOpacity>
               </>
             ) : (
               <TouchableOpacity
-                style={[styles.modalButton, styles.closeButton]}
+                style={[styles.modalButton, styles.closeOnlyButton]}
                 onPress={handleClose}
               >
-                <Text style={styles.closeButtonText}>닫기</Text>
+                <Text style={styles.closeOnlyButtonText}>닫기</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -216,185 +235,195 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    width: '90%',
-    maxWidth: 400,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.xl,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    ...typography.h3,
+    color: colors.textPrimary,
   },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 24,
-  },
-  recorderContainer: {
-    minHeight: 200,
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  startButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    backgroundColor: '#000',
-    borderRadius: 8,
+  recorderContainer: {
+    minHeight: 280,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  startButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  startContainer: {
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  startButton: {
+    width: 120,
+    height: 120,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.record,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   recordingContainer: {
     alignItems: 'center',
-    gap: 16,
+    gap: spacing.lg,
   },
   recordingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   recordingDot: {
     width: 12,
     height: 12,
-    borderRadius: 6,
-    backgroundColor: '#ef4444',
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.error,
   },
   recordingText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ef4444',
+    ...typography.h3,
+    color: colors.error,
   },
   recordingTime: {
-    fontSize: 32,
+    fontSize: 48,
     fontWeight: 'bold',
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
   },
   stopButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    backgroundColor: '#ef4444',
-    borderRadius: 8,
-  },
-  stopButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   reviewContainer: {
     width: '100%',
-    gap: 24,
+    alignItems: 'center',
+    gap: spacing.xl,
+  },
+  completedIcon: {
+    marginBottom: spacing.sm,
   },
   ratingSection: {
     alignItems: 'center',
-  },
-  ratingLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 12,
+    width: '100%',
   },
   ratingStars: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
   },
   starButton: {
-    padding: 4,
-  },
-  starText: {
-    fontSize: 32,
-    color: '#fbbf24',
+    padding: spacing.xs,
   },
   memoSection: {
-    gap: 8,
+    width: '100%',
   },
-  memoLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+  memoInputWrapper: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   memoInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+    padding: spacing.md,
+    ...typography.bodySmall,
+    color: colors.textPrimary,
     minHeight: 80,
     textAlignVertical: 'top',
   },
   modalButtons: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
+    gap: spacing.md,
+    marginTop: spacing.xl,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
   },
   cancelButton: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: colors.surfaceLight,
   },
   cancelButtonText: {
-    color: '#374151',
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
   confirmButton: {
-    backgroundColor: '#000',
+    backgroundColor: colors.primary,
   },
   confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
+    color: colors.background,
   },
-  closeButton: {
-    backgroundColor: '#f3f4f6',
+  closeOnlyButton: {
+    backgroundColor: colors.surfaceLight,
   },
-  closeButtonText: {
-    color: '#374151',
-    fontSize: 16,
+  closeOnlyButtonText: {
+    ...typography.body,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
   permissionDeniedContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
-    gap: 16,
+    padding: spacing.xl,
+    gap: spacing.lg,
   },
-  permissionDeniedIcon: {
-    fontSize: 48,
-    marginBottom: 8,
+  permissionIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   permissionDeniedText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
+    ...typography.h3,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   permissionDeniedDescription: {
-    fontSize: 14,
-    color: '#6b7280',
+    ...typography.bodySmall,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   settingsButton: {
-    marginTop: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: '#000',
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
   },
   settingsButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    ...typography.body,
     fontWeight: '600',
+    color: colors.background,
   },
 });

@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
 interface AudioPlayerProps {
   audioUrl: string;
@@ -61,32 +63,42 @@ export default function AudioPlayer({ audioUrl }: AudioPlayerProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${progress}%` }]} />
-      </View>
-
-      <View style={styles.controls}>
+      {/* 프로그레스 바 */}
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          <View style={[styles.progressThumb, { left: `${progress}%` }]} />
+        </View>
         <View style={styles.timeInfo}>
           <Text style={styles.timeText}>{formatTime(position)}</Text>
           <Text style={styles.timeText}>{formatTime(duration)}</Text>
         </View>
+      </View>
 
-        <View style={styles.buttons}>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={handlePlayPause}
-          >
-            <Text style={styles.controlButtonText}>
-              {status.playing ? '⏸' : '▶️'}
-            </Text>
-          </TouchableOpacity>
+      {/* 컨트롤 버튼 */}
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={handleStop}
+        >
+          <Ionicons name="stop" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={handleStop}
-          >
-            <Text style={styles.controlButtonText}>⏹</Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.playButton}
+          onPress={handlePlayPause}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={status.playing ? 'pause' : 'play'}
+            size={28}
+            color={colors.background}
+            style={status.playing ? {} : { marginLeft: 3 }}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.secondaryButton}>
+          {/* placeholder for alignment */}
         </View>
       </View>
     </View>
@@ -95,49 +107,64 @@ export default function AudioPlayer({ audioUrl }: AudioPlayerProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
-    padding: 12,
-    gap: 12,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  progressContainer: {
+    gap: spacing.sm,
   },
   progressBar: {
     height: 4,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 2,
-    overflow: 'hidden',
+    backgroundColor: colors.surfaceLighter,
+    borderRadius: borderRadius.full,
+    overflow: 'visible',
+    position: 'relative',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#000',
+    backgroundColor: colors.textPrimary,
+    borderRadius: borderRadius.full,
   },
-  controls: {
-    gap: 8,
+  progressThumb: {
+    position: 'absolute',
+    top: -4,
+    width: 12,
+    height: 12,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.textPrimary,
+    marginLeft: -6,
   },
   timeInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   timeText: {
-    fontSize: 12,
-    color: '#6b7280',
+    ...typography.caption,
+    color: colors.textTertiary,
     fontVariant: ['tabular-nums'],
   },
-  buttons: {
+  controls: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xl,
   },
-  controlButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+  playButton: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  controlButtonText: {
-    fontSize: 18,
+  secondaryButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
