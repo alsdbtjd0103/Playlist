@@ -19,10 +19,11 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
 
 export default function NowPlayingScreen() {
-  const { currentTrack, isExpanded, minimizePlayer, closePlayer } = usePlayer();
+  const { currentTrack, isExpanded, minimizePlayer } = usePlayer();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const insets = useSafeAreaInsets();
 
+  // 애니메이션 효과
   useEffect(() => {
     Animated.spring(translateY, {
       toValue: isExpanded ? 0 : SCREEN_HEIGHT,
@@ -31,6 +32,19 @@ export default function NowPlayingScreen() {
       friction: 11,
     }).start();
   }, [isExpanded]);
+
+  // 뒤로가기 버튼 핸들러
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (isExpanded) {
+        minimizePlayer();
+        return true; // 이벤트를 소비하여 기본 뒤로가기 동작 방지
+      }
+      return false; // 최소화 상태면 기본 동작 허용
+    });
+
+    return () => backHandler.remove();
+  }, [isExpanded, minimizePlayer]);
 
   const panResponder = useMemo(
     () =>
@@ -89,9 +103,7 @@ export default function NowPlayingScreen() {
         <TouchableOpacity style={styles.headerButton} onPress={minimizePlayer}>
           <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButton} onPress={closePlayer}>
-          <Ionicons name="close" size={24} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <View style={styles.headerButton} />
       </View>
 
       {/* 앨범 아트 */}

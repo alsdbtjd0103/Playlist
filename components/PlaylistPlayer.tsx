@@ -25,6 +25,10 @@ export default function PlaylistPlayer({
   const player = useAudioPlayer(currentItem?.version.storageUrl || '');
   const status = useAudioPlayerStatus(player);
   const [currentTime, setCurrentTime] = useState(0);
+  // 반복 모드: 'none' (반복 없음), 'one' (한 곡 반복), 'all' (전체 반복) - 기본값 'all'
+  const [repeatMode, setRepeatMode] = useState<'none' | 'one' | 'all'>('all');
+  // 셔플 모드
+  const [isShuffleOn, setIsShuffleOn] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -44,13 +48,60 @@ export default function PlaylistPlayer({
     };
   }, [status.playing, player]);
 
+  // 곡이 바뀔 때 자동으로 재생 시작
+  useEffect(() => {
+    if (currentItem && status.isLoaded) {
+      player.play();
+    }
+  }, [currentIndex]);
+
+  // 곡이 끝났을 때 자동으로 다음 곡 재생
   useEffect(() => {
     if (status.isLoaded && status.duration > 0) {
       if (currentTime >= status.duration - 0.5 && status.playing) {
-        handleNext();
+        handleTrackEnd();
       }
     }
   }, [currentTime, status.duration, status.playing, status.isLoaded]);
+
+  const handleTrackEnd = () => {
+    if (repeatMode === 'one') {
+      // 한 곡 반복: 현재 곡을 처음부터 다시 재생
+      player.seekTo(0);
+      setCurrentTime(0);
+      player.play();
+    } else if (repeatMode === 'all') {
+      // 전체 반복: 마지막 곡이면 첫 곡으로, 아니면 다음 곡으로
+      if (currentIndex < playlist.length - 1) {
+        handleNext();
+      } else {
+        // 마지막 곡이면 첫 곡으로
+        player.pause();
+        setCurrentTime(0);
+        onIndexChange(0);
+      }
+    } else {
+      // 반복 없음: 마지막 곡이 아니면 다음 곡으로
+      if (currentIndex < playlist.length - 1) {
+        handleNext();
+      } else {
+        // 마지막 곡이면 정지
+        player.pause();
+        player.seekTo(0);
+        setCurrentTime(0);
+      }
+    }
+  };
+
+  const toggleRepeatMode = () => {
+    if (repeatMode === 'none') {
+      setRepeatMode('all');
+    } else if (repeatMode === 'all') {
+      setRepeatMode('one');
+    } else {
+      setRepeatMode('none');
+    }
+  };
 
   const handlePlayPause = () => {
     if (status.playing) {
@@ -65,6 +116,11 @@ export default function PlaylistPlayer({
       player.pause();
       setCurrentTime(0);
       onIndexChange(currentIndex - 1);
+    } else if (repeatMode === 'all') {
+      // 전체 반복 모드에서 첫 곡에서 이전을 누르면 마지막 곡으로
+      player.pause();
+      setCurrentTime(0);
+      onIndexChange(playlist.length - 1);
     }
   };
 
@@ -73,7 +129,13 @@ export default function PlaylistPlayer({
       player.pause();
       setCurrentTime(0);
       onIndexChange(currentIndex + 1);
+    } else if (repeatMode === 'all') {
+      // 전체 반복 모드에서 마지막 곡에서 다음을 누르면 첫 곡으로
+      player.pause();
+      setCurrentTime(0);
+      onIndexChange(0);
     } else {
+      // 반복 모드가 아니면 정지
       player.pause();
       player.seekTo(0);
       setCurrentTime(0);
@@ -130,18 +192,39 @@ export default function PlaylistPlayer({
 
       {/* 컨트롤 버튼 */}
       <View style={styles.controls}>
+        {/* 셔플 버튼 */}
         <TouchableOpacity
-          style={[styles.secondaryButton, currentIndex === 0 && styles.disabledButton]}
+          style={styles.controlButton}
+          onPress={() => setIsShuffleOn(!isShuffleOn)}
+          activeOpacity={0.5}
+        >
+          <View>
+            <Ionicons
+              name="shuffle"
+              size={24}
+              color={colors.textPrimary}
+            />
+            {isShuffleOn && (
+              <View style={styles.activeIndicator} />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* 이전 곡 버튼 */}
+        <TouchableOpacity
+          style={styles.controlButton}
           onPress={handlePrevious}
-          disabled={currentIndex === 0}
+          disabled={currentIndex === 0 && repeatMode !== 'all'}
+          activeOpacity={0.5}
         >
           <Ionicons
             name="play-skip-back"
-            size={24}
-            color={currentIndex === 0 ? colors.textTertiary : colors.textSecondary}
+            size={32}
+            color={currentIndex === 0 && repeatMode !== 'all' ? colors.textTertiary : colors.textPrimary}
           />
         </TouchableOpacity>
 
+        {/* 재생/일시정지 버튼 */}
         <TouchableOpacity
           style={styles.playButton}
           onPress={handlePlayPause}
@@ -155,19 +238,36 @@ export default function PlaylistPlayer({
           />
         </TouchableOpacity>
 
+        {/* 다음 곡 버튼 */}
         <TouchableOpacity
-          style={[
-            styles.secondaryButton,
-            currentIndex === playlist.length - 1 && styles.disabledButton,
-          ]}
+          style={styles.controlButton}
           onPress={handleNext}
-          disabled={currentIndex === playlist.length - 1}
+          disabled={currentIndex === playlist.length - 1 && repeatMode !== 'all'}
+          activeOpacity={0.5}
         >
           <Ionicons
             name="play-skip-forward"
-            size={24}
-            color={currentIndex === playlist.length - 1 ? colors.textTertiary : colors.textSecondary}
+            size={32}
+            color={currentIndex === playlist.length - 1 && repeatMode !== 'all' ? colors.textTertiary : colors.textPrimary}
           />
+        </TouchableOpacity>
+
+        {/* 반복 모드 버튼 */}
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={toggleRepeatMode}
+          activeOpacity={0.5}
+        >
+          <View style={styles.repeatButtonContent}>
+            <Ionicons
+              name="repeat"
+              size={28}
+              color={colors.textPrimary}
+            />
+            {repeatMode === 'one' && (
+              <Text style={styles.repeatOneText}>1</Text>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -252,10 +352,31 @@ const styles = StyleSheet.create({
   },
   controls: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+  },
+  controlButton: {
+    padding: spacing.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.xl,
-    marginTop: spacing.sm,
+  },
+  repeatButtonContent: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -6,
+    left: '50%',
+    marginLeft: -2,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.textPrimary,
   },
   secondaryButton: {
     width: 48,
@@ -275,5 +396,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  repeatOneText: {
+    position: 'absolute',
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    top: 8,
+    right: 6,
   },
 });

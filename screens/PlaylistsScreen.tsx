@@ -23,6 +23,7 @@ import {
   addToPlaylist,
 } from '../lib/database';
 import { colors, spacing, borderRadius, typography } from '../lib/theme';
+import ScreenHeader from '../components/ScreenHeader';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Playlists'>;
 
@@ -30,7 +31,6 @@ export default function PlaylistsScreen({ navigation }: Props) {
   const [playlists, setPlaylists] = useState<Playlist[] | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
   useFocusEffect(
@@ -56,22 +56,12 @@ export default function PlaylistsScreen({ navigation }: Props) {
 
     setCreating(true);
     try {
-      const playlistId = await createPlaylist(
-        name.trim(),
-        description.trim() || undefined,
-        false
-      );
-
-      const defaultVersions = await getAllDefaultVersions();
-      for (let i = 0; i < defaultVersions.length; i++) {
-        await addToPlaylist(playlistId, defaultVersions[i].version.id, i);
-      }
+      await createPlaylist(name.trim(), false);
 
       setName('');
-      setDescription('');
       setModalVisible(false);
       await fetchPlaylists();
-      Alert.alert('완료', '플레이리스트가 생성되었습니다. 모든 대표 버전이 추가되었습니다.');
+      Alert.alert('완료', '플레이리스트가 생성되었습니다.');
     } catch (error) {
       console.error('플레이리스트 생성 실패:', error);
       Alert.alert('오류', '플레이리스트 생성에 실패했습니다.');
@@ -147,19 +137,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <View style={styles.logo}>
-          <Ionicons name="musical-notes" size={20} color={colors.primary} />
-          <Text style={styles.logoText}>Playlist</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Ionicons name="add" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader onAddPress={() => setModalVisible(true)} />
 
       {playlists.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -168,7 +146,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
           </View>
           <Text style={styles.emptyTitle}>플레이리스트가 없습니다</Text>
           <Text style={styles.emptySubtitle}>
-            새 플레이리스트를 만들면 자동으로{'\n'}모든 대표 버전이 추가됩니다
+            "대표곡" 플레이리스트가 자동으로 생성되며,{'\n'}대표 버전으로 설정한 곡들이 자동으로 추가됩니다
           </Text>
         </View>
       ) : (
@@ -210,22 +188,6 @@ export default function PlaylistsScreen({ navigation }: Props) {
                   placeholderTextColor={colors.textTertiary}
                   value={name}
                   onChangeText={setName}
-                  editable={!creating}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>설명 (선택)</Text>
-              <View style={[styles.inputWrapper, styles.textAreaWrapper]}>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="플레이리스트에 대한 설명을 입력하세요"
-                  placeholderTextColor={colors.textTertiary}
-                  value={description}
-                  onChangeText={setDescription}
-                  multiline
-                  numberOfLines={3}
                   editable={!creating}
                 />
               </View>
@@ -276,31 +238,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     ...typography.body,
     color: colors.textSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  logo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   listContainer: {
     padding: spacing.lg,
@@ -422,9 +359,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  textAreaWrapper: {
-    alignItems: 'flex-start',
-  },
   inputIcon: {
     marginLeft: spacing.md,
   },
@@ -433,10 +367,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     ...typography.body,
     color: colors.textPrimary,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
   },
   modalButtons: {
     flexDirection: 'row',

@@ -300,19 +300,10 @@ export default function SongDetailScreen({ route, navigation }: Props) {
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Ionicons name="mic-off-outline" size={48} color={colors.textTertiary} />
-              </View>
               <Text style={styles.emptyTitle}>아직 녹음된 버전이 없습니다</Text>
               <Text style={styles.emptySubtitle}>
                 첫 번째 녹음을 시작해보세요!
               </Text>
-              <TouchableOpacity
-                style={styles.emptyButton}
-                onPress={() => setRecorderVisible(true)}
-              >
-                <Ionicons name="mic" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
             </View>
           )}
         </View>

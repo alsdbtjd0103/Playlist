@@ -9,6 +9,9 @@ const KEYS = {
   PLAYLIST_ITEMS: '@playlistItems',
 };
 
+// 기본 플레이리스트 상수
+const DEFAULT_PLAYLIST_NAME = '대표곡';
+
 // === Helper 함수 ===
 
 const generateId = (): string => {
@@ -71,6 +74,9 @@ export const updateSongDefaultVersion = async (
     songs[songIndex].defaultVersionId = versionId || undefined;
     songs[songIndex].updatedAt = new Date();
     await AsyncStorage.setItem(KEYS.SONGS, JSON.stringify(songs));
+    
+    // 대표곡 플레이리스트 동기화
+    await syncDefaultPlaylist();
   }
 };
 
@@ -183,7 +189,6 @@ export const deleteVersion = async (versionId: string): Promise<void> => {
 
 export const createPlaylist = async (
   name: string,
-  description?: string,
   isDefault: boolean = false
 ): Promise<string> => {
   const now = new Date();
@@ -192,7 +197,6 @@ export const createPlaylist = async (
   const newPlaylist: Playlist = {
     id: playlistId,
     name,
-    description: description || undefined,
     isDefault,
     createdAt: now,
     updatedAt: now,
@@ -211,20 +215,38 @@ const getAllPlaylists = async (): Promise<Playlist[]> => {
     if (!playlistsJson) return [];
 
     const playlists = JSON.parse(playlistsJson);
-    // Date 객체로 변환
-    return playlists.map((playlist: any) => ({
-      ...playlist,
-      createdAt: new Date(playlist.createdAt),
-      updatedAt: new Date(playlist.updatedAt),
-    }));
+    // Date 객체로 변환 및 description 필드 제거 (마이그레이션)
+    const cleanedPlaylists = playlists.map((playlist: any) => {
+      const { description, ...rest } = playlist; // description 제거
+      return {
+        ...rest,
+        createdAt: new Date(rest.createdAt),
+        updatedAt: new Date(rest.updatedAt),
+      };
+    });
+    
+    // description이 있었다면 정리된 데이터를 다시 저장
+    if (playlists.some((p: any) => p.description !== undefined)) {
+      await AsyncStorage.setItem(KEYS.PLAYLISTS, JSON.stringify(cleanedPlaylists));
+    }
+    
+    return cleanedPlaylists;
   } catch {
     return [];
   }
 };
 
 export const getPlaylists = async (): Promise<Playlist[]> => {
+  // 기본 플레이리스트 확인 및 생성
+  await ensureDefaultPlaylist();
+  
   const playlists = await getAllPlaylists();
-  return playlists.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  return playlists.sort((a, b) => {
+    // 기본 플레이리스트가 항상 맨 위에 오도록
+    if (a.isDefault && !b.isDefault) return -1;
+    if (!a.isDefault && b.isDefault) return 1;
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
 };
 
 export const addToPlaylist = async (
@@ -282,11 +304,17 @@ export const removeFromPlaylist = async (playlistId: string, versionId: string):
 };
 
 export const deletePlaylist = async (playlistId: string): Promise<void> => {
+  // 기본 플레이리스트는 삭제 불가
+  const playlists = await getAllPlaylists();
+  const playlist = playlists.find((p) => p.id === playlistId);
+  if (playlist?.isDefault) {
+    throw new Error('기본 플레이리스트는 삭제할 수 없습니다.');
+  }
+  
   const items = await getAllPlaylistItems();
   const filteredItems = items.filter((item) => item.playlistId !== playlistId);
   await AsyncStorage.setItem(KEYS.PLAYLIST_ITEMS, JSON.stringify(filteredItems));
 
-  const playlists = await getAllPlaylists();
   const filteredPlaylists = playlists.filter((p) => p.id !== playlistId);
   await AsyncStorage.setItem(KEYS.PLAYLISTS, JSON.stringify(filteredPlaylists));
 };
@@ -332,4 +360,50 @@ export const getAllDefaultVersions = async (): Promise<{ song: Song; version: Ve
   );
 
   return results.filter((item) => item !== null) as { song: Song; version: Version }[];
+};
+
+// === 기본 플레이리스트 관리 ===
+
+// 기본 플레이리스트가 있는지 확인하고 없으면 생성
+export const ensureDefaultPlaylist = async (): Promise<string> => {
+  const playlists = await getAllPlaylists();
+  const defaultPlaylist = playlists.find((p) => p.isDefault);
+  
+  if (defaultPlaylist) {
+    return defaultPlaylist.id;
+  }
+  
+  // 기본 플레이리스트 생성
+  const playlistId = await createPlaylist(DEFAULT_PLAYLIST_NAME, true);
+  
+  // 기존 대표 버전들을 모두 추가
+  await syncDefaultPlaylist();
+  
+  return playlistId;
+};
+
+// 대표곡 플레이리스트를 현재 대표 버전들과 동기화
+export const syncDefaultPlaylist = async (): Promise<void> => {
+  const playlistId = await ensureDefaultPlaylist();
+  
+  // 현재 플레이리스트 항목들 가져오기
+  const currentItems = await getPlaylistItems(playlistId);
+  const currentVersionIds = new Set(currentItems.map((item) => item.versionId));
+  
+  // 모든 대표 버전 가져오기
+  const defaultVersions = await getAllDefaultVersions();
+  const defaultVersionIds = new Set(defaultVersions.map((dv) => dv.version.id));
+  
+  // 제거해야 할 항목들 (더 이상 대표 버전이 아닌 것들)
+  const itemsToRemove = currentItems.filter((item) => !defaultVersionIds.has(item.versionId));
+  for (const item of itemsToRemove) {
+    await removeFromPlaylist(playlistId, item.versionId);
+  }
+  
+  // 추가해야 할 항목들 (새로 대표 버전으로 설정된 것들)
+  const versionsToAdd = defaultVersions.filter((dv) => !currentVersionIds.has(dv.version.id));
+  for (let i = 0; i < versionsToAdd.length; i++) {
+    const order = currentItems.length + i;
+    await addToPlaylist(playlistId, versionsToAdd[i].version.id, order);
+  }
 };

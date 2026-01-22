@@ -21,6 +21,7 @@ import { RootStackParamList, SongWithVersions } from "../types";
 import { getAllSongs, addSong, getVersionsBySong, deleteSong } from "../lib/database";
 import { useFocusEffect } from "@react-navigation/native";
 import { colors, spacing, borderRadius, typography } from "../lib/theme";
+import ScreenHeader from "../components/ScreenHeader";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -204,18 +205,7 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <View style={styles.logo}>
-          <Ionicons name="musical-notes" size={20} color={colors.primary} />
-          <Text style={styles.logoText}>Playlist</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Ionicons name="add" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader onAddPress={() => setModalVisible(true)} />
 
       {songs.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -355,31 +345,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     fontSize: typography.body.fontSize,
     color: colors.textSecondary,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  logo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    justifyContent: "center",
-    alignItems: "center",
   },
   listContainer: {
     padding: spacing.lg,
