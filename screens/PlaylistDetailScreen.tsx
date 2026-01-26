@@ -16,7 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, Song, Version } from '../types';
 import { getPlaylistWithDetails, removeFromPlaylist, getAllSongs, getVersionsBySong, addToPlaylist } from '../lib/database';
-import PlaylistPlayer from '../components/PlaylistPlayer';
+import { usePlayer } from '../contexts/PlayerContext';
 import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaylistDetail'>;
@@ -31,12 +31,12 @@ interface PlaylistItem {
 
 export default function PlaylistDetailScreen({ navigation, route }: Props) {
   const { playlistId } = route.params;
-  const [playlist, setPlaylist] = useState<any>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [playlist, setPlaylistData] = useState<any>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [availableSongs, setAvailableSongs] = useState<{ song: Song; versions: Version[] }[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const { setPlaylist, playlistState } = usePlayer();
 
   useFocusEffect(
     useCallback(() => {
@@ -47,7 +47,7 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
   const fetchPlaylist = async () => {
     try {
       const data = await getPlaylistWithDetails(playlistId);
-      setPlaylist(data);
+      setPlaylistData(data);
     } catch (error) {
       console.error('플레이리스트 로드 실패:', error);
     }
@@ -120,6 +120,19 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
     }
   };
 
+  const handleTrackPress = (index: number) => {
+    const playlistItems = playlist.items.map((item: PlaylistItem) => ({
+      song: item.song,
+      version: item.version,
+    }));
+    setPlaylist(playlistItems, index);
+  };
+
+  // 현재 재생 중인 곡의 인덱스 계산
+  const currentPlayingIndex = playlistState && playlist && playlistState.items.length === playlist.items.length
+    ? playlistState.currentIndex
+    : -1;
+
   const handleRemoveItem = (item: PlaylistItem) => {
     if (playlist.isDefault) {
       Alert.alert('알림', '기본 플레이리스트에서는 항목을 삭제할 수 없습니다.');
@@ -138,9 +151,6 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
             try {
               await removeFromPlaylist(playlistId, item.versionId);
               await fetchPlaylist();
-              if (currentIndex >= playlist.items.length - 1) {
-                setCurrentIndex(Math.max(0, playlist.items.length - 2));
-              }
             } catch (error) {
               console.error('항목 제거 실패:', error);
               Alert.alert('오류', '항목 제거에 실패했습니다.');
@@ -153,20 +163,20 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
 
   const renderTrackItem = ({ item, index }: { item: PlaylistItem; index: number }) => (
     <TouchableOpacity
-      style={[styles.trackItem, index === currentIndex && styles.trackItemActive]}
-      onPress={() => setCurrentIndex(index)}
+      style={[styles.trackItem, index === currentPlayingIndex && styles.trackItemActive]}
+      onPress={() => handleTrackPress(index)}
       onLongPress={() => handleRemoveItem(item)}
       activeOpacity={0.7}
     >
-      <View style={[styles.trackNumber, index === currentIndex && styles.trackNumberActive]}>
-        {index === currentIndex ? (
+      <View style={[styles.trackNumber, index === currentPlayingIndex && styles.trackNumberActive]}>
+        {index === currentPlayingIndex ? (
           <Ionicons name="musical-note" size={14} color={colors.textPrimary} />
         ) : (
           <Text style={styles.trackNumberText}>{index + 1}</Text>
         )}
       </View>
       <View style={styles.trackInfo}>
-        <Text style={[styles.trackTitle, index === currentIndex && styles.trackTitleActive]} numberOfLines={1}>
+        <Text style={[styles.trackTitle, index === currentPlayingIndex && styles.trackTitleActive]} numberOfLines={1}>
           {item.song.title}
         </Text>
         {item.song.artist && (
@@ -187,11 +197,6 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
       </View>
     );
   }
-
-  const playlistData = playlist.items.map((item: PlaylistItem) => ({
-    song: item.song,
-    version: item.version,
-  }));
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -228,12 +233,22 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
         </View>
       ) : (
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.playerSection}>
-            <PlaylistPlayer
-              playlist={playlistData}
-              currentIndex={currentIndex}
-              onIndexChange={setCurrentIndex}
-            />
+          {/* 플레이리스트 정보 헤더 */}
+          <View style={styles.playlistHeader}>
+            <View style={styles.playlistCover}>
+              <Ionicons name="musical-notes" size={48} color={colors.textSecondary} />
+            </View>
+            <View style={styles.playlistInfo}>
+              <Text style={styles.playlistTitle}>{playlist.name}</Text>
+              <Text style={styles.playlistCount}>{playlist.items.length}곡</Text>
+              <TouchableOpacity
+                style={styles.playAllButton}
+                onPress={() => handleTrackPress(0)}
+              >
+                <Ionicons name="play" size={20} color={colors.background} />
+                <Text style={styles.playAllText}>전체 재생</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.trackListSection}>
@@ -410,8 +425,47 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  playerSection: {
+  playlistHeader: {
+    flexDirection: 'row',
     padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  playlistCover: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playlistInfo: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  playlistTitle: {
+    ...typography.h2,
+    color: colors.textPrimary,
+  },
+  playlistCount: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  playAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+  },
+  playAllText: {
+    ...typography.bodySmall,
+    fontWeight: '600',
+    color: colors.background,
   },
   trackListSection: {
     padding: spacing.lg,

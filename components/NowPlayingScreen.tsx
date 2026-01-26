@@ -19,9 +19,27 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
 
 export default function NowPlayingScreen() {
-  const { currentTrack, isExpanded, minimizePlayer } = usePlayer();
+  const {
+    currentTrack,
+    isExpanded,
+    minimizePlayer,
+    playlistState,
+    playNext,
+    playPrevious,
+    setRepeatMode,
+    handleTrackEnd,
+  } = usePlayer();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const insets = useSafeAreaInsets();
+
+  const isPlaylistMode = playlistState !== null;
+
+  const cycleRepeatMode = () => {
+    if (!playlistState) return;
+    const modes: ('none' | 'one' | 'all')[] = ['none', 'all', 'one'];
+    const currentIdx = modes.indexOf(playlistState.repeatMode);
+    setRepeatMode(modes[(currentIdx + 1) % 3]);
+  };
 
   // 애니메이션 효과
   useEffect(() => {
@@ -123,11 +141,23 @@ export default function NowPlayingScreen() {
           <Ionicons name="star" size={16} color={colors.warning} />
           <Text style={styles.ratingText}>{currentTrack.version.rating}</Text>
         </View>
+        {isPlaylistMode && playlistState && (
+          <Text style={styles.trackIndicator}>
+            {playlistState.currentIndex + 1} / {playlistState.items.length}
+          </Text>
+        )}
       </View>
 
       {/* 오디오 플레이어 */}
       <View style={styles.playerContainer}>
-        <AudioPlayer audioUrl={currentTrack.version.storageUrl} />
+        <AudioPlayer
+          onTrackEnd={isPlaylistMode ? handleTrackEnd : undefined}
+          showPlaylistControls={isPlaylistMode}
+          onPrevious={playPrevious}
+          onNext={playNext}
+          repeatMode={playlistState?.repeatMode}
+          onRepeatModeChange={cycleRepeatMode}
+        />
       </View>
 
       {/* 메모 */}
@@ -216,11 +246,16 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
+  trackIndicator: {
+    ...typography.bodySmall,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
   playerContainer: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xl,
   },
-  memoContainer: {
+    memoContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,

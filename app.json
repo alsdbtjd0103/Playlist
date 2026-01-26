@@ -15,23 +15,33 @@
       "backgroundColor": "#0f0f0f",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다.",
-        "UIBackgroundModes": []
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
       "package": "com.playlist.app",
       "backgroundColor": "#0f0f0f",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WAKE_LOCK"
       ]
     },
     "plugins": [
       [
         "expo-audio",
         {
-          "microphonePermission": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다."
+          "microphonePermission": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다.",
+          "enableBackgroundAudio": true
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "85417100-960a-47f3-9b07-5af25be39e7a"
+      }
+    }
   }
 }

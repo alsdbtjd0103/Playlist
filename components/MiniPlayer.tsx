@@ -5,7 +5,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { colors, spacing, typography } from '../lib/theme';
 
 export default function MiniPlayer() {
-  const { currentTrack, isPlaying, isExpanded, setIsPlaying, expandPlayer, closePlayer } = usePlayer();
+  const { currentTrack, isPlaying, isExpanded, expandPlayer, closePlayer, togglePlayPause } = usePlayer();
 
   if (!currentTrack || isExpanded) {
     return null;
@@ -35,7 +35,7 @@ export default function MiniPlayer() {
       <View style={styles.controls}>
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={() => setIsPlaying(!isPlaying)}
+          onPress={togglePlayPause}
         >
           <Ionicons
             name={isPlaying ? 'pause' : 'play'}
