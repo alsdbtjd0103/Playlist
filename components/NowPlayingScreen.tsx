@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ export default function NowPlayingScreen() {
   } = usePlayer();
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const insets = useSafeAreaInsets();
+  const [shuffleMode, setShuffleMode] = useState(false);
 
   const isPlaylistMode = playlistState !== null;
 
@@ -39,6 +40,10 @@ export default function NowPlayingScreen() {
     const modes: ('none' | 'one' | 'all')[] = ['none', 'all', 'one'];
     const currentIdx = modes.indexOf(playlistState.repeatMode);
     setRepeatMode(modes[(currentIdx + 1) % 3]);
+  };
+
+  const toggleShuffleMode = () => {
+    setShuffleMode(prev => !prev);
   };
 
   // 애니메이션 효과
@@ -119,7 +124,7 @@ export default function NowPlayingScreen() {
       {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerButton} onPress={minimizePlayer}>
-          <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
+          <Ionicons name="chevron-down" size={28} color="#e5e5e5" />
         </TouchableOpacity>
         <View style={styles.headerButton} />
       </View>
@@ -127,7 +132,7 @@ export default function NowPlayingScreen() {
       {/* 앨범 아트 */}
       <View style={styles.albumArtContainer}>
         <View style={styles.albumArt}>
-          <Ionicons name="musical-notes" size={80} color={colors.textSecondary} />
+          <Ionicons name="musical-notes" size={120} color="#404040" />
         </View>
       </View>
 
@@ -138,7 +143,7 @@ export default function NowPlayingScreen() {
           <Text style={styles.songArtist}>{currentTrack.song.artist}</Text>
         )}
         <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={16} color={colors.warning} />
+          <Ionicons name="star" size={16} color="#fbbf24" />
           <Text style={styles.ratingText}>{currentTrack.version.rating}</Text>
         </View>
         {isPlaylistMode && playlistState && (
@@ -157,13 +162,15 @@ export default function NowPlayingScreen() {
           onNext={playNext}
           repeatMode={playlistState?.repeatMode}
           onRepeatModeChange={cycleRepeatMode}
+          shuffleMode={shuffleMode}
+          onShuffleModeChange={toggleShuffleMode}
         />
       </View>
 
       {/* 메모 */}
       {currentTrack.version.memo && (
         <View style={styles.memoContainer}>
-          <Ionicons name="document-text-outline" size={16} color={colors.textTertiary} />
+          <Ionicons name="document-text-outline" size={16} color="#808080" />
           <Text style={styles.memoText}>{currentTrack.version.memo}</Text>
         </View>
       )}
@@ -178,7 +185,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.background,
+    backgroundColor: '#0a0a0a',
     zIndex: 1000,
   },
   handleArea: {
@@ -189,14 +196,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: '#404040',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md,
   },
   headerButton: {
     width: 44,
@@ -207,67 +214,72 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#b3b3b3',
   },
   albumArtContainer: {
     alignItems: 'center',
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: spacing.xl,
+    paddingHorizontal: 30,
+    paddingVertical: spacing.lg,
   },
   albumArt: {
-    width: 280,
-    height: 280,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
+    width: '100%',
+    maxWidth: 400,
+    height: 400,
+    borderRadius: 20,
+    backgroundColor: '#1a1a1a',
     justifyContent: 'center',
     alignItems: 'center',
   },
   songInfo: {
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    gap: spacing.sm,
+    gap: spacing.xs,
+    marginTop: spacing.md,
   },
   songTitle: {
-    ...typography.h1,
-    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#ffffff',
     textAlign: 'center',
   },
   songArtist: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: '#b3b3b3',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   ratingText: {
-    ...typography.body,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#b3b3b3',
   },
   trackIndicator: {
-    ...typography.bodySmall,
-    color: colors.textTertiary,
+    fontSize: 12,
+    color: '#808080',
     marginTop: spacing.xs,
   },
   playerContainer: {
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.lg,
+    flex: 1,
   },
     memoContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
     marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
     padding: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: '#1a1a1a',
     borderRadius: borderRadius.md,
   },
   memoText: {
     flex: 1,
-    ...typography.bodySmall,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: '#b3b3b3',
     lineHeight: 20,
   },
 });

@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
-import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, AudioPlayer } from 'expo-audio';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import TrackPlayer, {
+  State,
+  Event,
+  usePlaybackState,
+  useProgress,
+  RepeatMode,
+  Capability,
+} from 'react-native-track-player';
 import { Song, Version } from '../types';
 
 interface PlayingTrack {
@@ -18,7 +25,6 @@ interface PlayerContextType {
   isPlaying: boolean;
   isExpanded: boolean;
   playlistState: PlaylistState | null;
-  player: AudioPlayer | null;
   currentTime: number;
   duration: number;
   setCurrentTrack: (track: PlayingTrack | null) => void;
@@ -37,71 +43,140 @@ interface PlayerContextType {
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
+let isPlayerSetup = false;
+
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [currentTrack, setCurrentTrackState] = useState<PlayingTrack | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlayingState] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [playlistState, setPlaylistState] = useState<PlaylistState | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [isReady, setIsReady] = useState(false);
 
-  // 오디오 플레이어
-  const audioUrl = currentTrack?.version.storageUrl || '';
-  const player = useAudioPlayer(audioUrl);
-  const status = useAudioPlayerStatus(player);
-  const duration = status.duration || 0;
+  const playbackState = usePlaybackState();
+  const progress = useProgress();
+
+  const currentTime = progress.position || 0;
+  const duration = progress.duration || 0;
+
+  // TrackPlayer 초기화
+  useEffect(() => {
+    async function setupPlayer() {
+      if (isPlayerSetup) {
+        setIsReady(true);
+        return;
+      }
+
+      try {
+        await TrackPlayer.setupPlayer({
+          autoHandleInterruptions: true,
+        });
+
+        await TrackPlayer.updateOptions({
+          capabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.Stop,
+            Capability.SeekTo,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+          ],
+          compactCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+          ],
+          notificationCapabilities: [
+            Capability.Play,
+            Capability.Pause,
+            Capability.SkipToNext,
+            Capability.SkipToPrevious,
+          ],
+        });
+
+        isPlayerSetup = true;
+        setIsReady(true);
+      } catch (error) {
+        console.error('TrackPlayer 초기화 실패:', error);
+      }
+    }
+
+    setupPlayer();
+  }, []);
 
   // 재생 상태 동기화
   useEffect(() => {
-    setIsPlaying(status.playing);
-  }, [status.playing]);
+    const state = playbackState.state;
+    setIsPlayingState(state === State.Playing);
+  }, [playbackState.state]);
 
-  // 현재 시간 업데이트
+  // 트랙 종료 이벤트 리스너
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (status.playing) {
-      interval = setInterval(() => {
-        setCurrentTime(player.currentTime);
-      }, 100);
-    } else {
-      setCurrentTime(player.currentTime);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [status.playing, player]);
-
-  // 백그라운드 재생을 위한 오디오 모드 설정
-  useEffect(() => {
-    const configureAudio = async () => {
-      try {
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          staysActiveInBackground: true,
-        });
-      } catch (error) {
-        console.error('오디오 모드 설정 실패:', error);
+    const subscription = TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
+      if (playlistState) {
+        const { repeatMode } = playlistState;
+        if (repeatMode === 'all') {
+          await TrackPlayer.skip(0);
+          await TrackPlayer.play();
+        }
       }
-    };
-    configureAudio();
-  }, []);
+    });
 
-  const setCurrentTrack = useCallback((track: PlayingTrack | null) => {
-    setCurrentTrackState(track);
-    setCurrentTime(0);
-  }, []);
+    return () => subscription.remove();
+  }, [playlistState]);
 
-  const togglePlayPause = useCallback(() => {
-    if (status.playing) {
-      player.pause();
-    } else {
-      player.play();
+  // 트랙 변경 이벤트 리스너
+  useEffect(() => {
+    const subscription = TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
+      if (event.index !== undefined && playlistState) {
+        const newTrack = playlistState.items[event.index];
+        if (newTrack) {
+          setCurrentTrackState(newTrack);
+          setPlaylistState(prev => prev ? { ...prev, currentIndex: event.index! } : null);
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [playlistState]);
+
+  const setCurrentTrack = useCallback(async (track: PlayingTrack | null) => {
+    if (!isReady) return;
+
+    if (!track) {
+      await TrackPlayer.reset();
+      setCurrentTrackState(null);
+      return;
     }
-  }, [player, status.playing]);
 
-  const seekTo = useCallback((seconds: number) => {
-    player.seekTo(seconds);
-    setCurrentTime(seconds);
-  }, [player]);
+    try {
+      await TrackPlayer.reset();
+      await TrackPlayer.add({
+        id: track.version.id,
+        url: track.version.storageUrl,
+        title: track.song.title,
+        artist: track.song.artist || '알 수 없는 아티스트',
+        duration: track.version.duration,
+      });
+      await TrackPlayer.play();
+      setCurrentTrackState(track);
+    } catch (error) {
+      console.error('트랙 설정 실패:', error);
+    }
+  }, [isReady]);
+
+  const togglePlayPause = useCallback(async () => {
+    const state = playbackState.state;
+    if (state === State.Playing) {
+      await TrackPlayer.pause();
+    } else {
+      await TrackPlayer.play();
+    }
+  }, [playbackState.state]);
+
+  const seekTo = useCallback(async (seconds: number) => {
+    await TrackPlayer.seekTo(seconds);
+  }, []);
 
   const expandPlayer = useCallback(() => {
     setIsExpanded(true);
@@ -111,91 +186,91 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setIsExpanded(false);
   }, []);
 
-  const closePlayer = useCallback(() => {
-    player.pause();
+  const closePlayer = useCallback(async () => {
+    await TrackPlayer.reset();
     setCurrentTrackState(null);
-    setIsPlaying(false);
+    setIsPlayingState(false);
     setIsExpanded(false);
     setPlaylistState(null);
-  }, [player]);
-
-  const setPlaylist = useCallback((items: PlayingTrack[], startIndex = 0) => {
-    if (items.length === 0) return;
-
-    setPlaylistState({
-      items,
-      currentIndex: startIndex,
-      repeatMode: 'all',
-    });
-    setCurrentTrack(items[startIndex]);
-    setIsExpanded(true);
   }, []);
 
-  const playNext = useCallback(() => {
-    if (!playlistState) return;
+  const setPlaylist = useCallback(async (items: PlayingTrack[], startIndex = 0) => {
+    if (!isReady || items.length === 0) return;
 
-    const { items, currentIndex, repeatMode } = playlistState;
-    let nextIndex = currentIndex + 1;
+    try {
+      await TrackPlayer.reset();
 
-    if (nextIndex >= items.length) {
-      if (repeatMode === 'all') {
-        nextIndex = 0;
-      } else {
-        return;
+      const tracks = items.map(item => ({
+        id: item.version.id,
+        url: item.version.storageUrl,
+        title: item.song.title,
+        artist: item.song.artist || '알 수 없는 아티스트',
+        duration: item.version.duration,
+      }));
+
+      await TrackPlayer.add(tracks);
+      await TrackPlayer.skip(startIndex);
+      await TrackPlayer.play();
+
+      setPlaylistState({
+        items,
+        currentIndex: startIndex,
+        repeatMode: 'all',
+      });
+      setCurrentTrackState(items[startIndex]);
+      setIsExpanded(true);
+    } catch (error) {
+      console.error('플레이리스트 설정 실패:', error);
+    }
+  }, [isReady]);
+
+  const playNext = useCallback(async () => {
+    try {
+      await TrackPlayer.skipToNext();
+    } catch (error) {
+      // 마지막 트랙인 경우 처음으로
+      if (playlistState?.repeatMode === 'all') {
+        await TrackPlayer.skip(0);
+        await TrackPlayer.play();
       }
     }
-
-    setPlaylistState(prev => prev ? { ...prev, currentIndex: nextIndex } : null);
-    setCurrentTrack(items[nextIndex]);
   }, [playlistState]);
 
-  const playPrevious = useCallback(() => {
-    if (!playlistState) return;
-
-    const { items, currentIndex, repeatMode } = playlistState;
-    let prevIndex = currentIndex - 1;
-
-    if (prevIndex < 0) {
-      if (repeatMode === 'all') {
-        prevIndex = items.length - 1;
-      } else {
-        return;
+  const playPrevious = useCallback(async () => {
+    try {
+      await TrackPlayer.skipToPrevious();
+    } catch (error) {
+      // 첫 트랙인 경우 마지막으로
+      if (playlistState?.repeatMode === 'all' && playlistState.items.length > 0) {
+        await TrackPlayer.skip(playlistState.items.length - 1);
+        await TrackPlayer.play();
       }
     }
-
-    setPlaylistState(prev => prev ? { ...prev, currentIndex: prevIndex } : null);
-    setCurrentTrack(items[prevIndex]);
   }, [playlistState]);
 
-  const setRepeatMode = useCallback((mode: 'none' | 'one' | 'all') => {
+  const setRepeatMode = useCallback(async (mode: 'none' | 'one' | 'all') => {
+    let trackPlayerMode: RepeatMode;
+    switch (mode) {
+      case 'one':
+        trackPlayerMode = RepeatMode.Track;
+        break;
+      case 'all':
+        trackPlayerMode = RepeatMode.Queue;
+        break;
+      default:
+        trackPlayerMode = RepeatMode.Off;
+    }
+    await TrackPlayer.setRepeatMode(trackPlayerMode);
     setPlaylistState(prev => prev ? { ...prev, repeatMode: mode } : null);
   }, []);
 
   const handleTrackEnd = useCallback(() => {
-    if (!playlistState) return;
+    // TrackPlayer가 자동으로 처리
+  }, []);
 
-    const { items, currentIndex, repeatMode } = playlistState;
-
-    if (repeatMode === 'one') {
-      // 한 곡 반복: 현재 곡 다시 재생 (AudioPlayer에서 처리)
-      return;
-    }
-
-    let nextIndex = currentIndex + 1;
-
-    if (nextIndex >= items.length) {
-      if (repeatMode === 'all') {
-        nextIndex = 0;
-      } else {
-        // 반복 없음: 재생 종료
-        setIsPlaying(false);
-        return;
-      }
-    }
-
-    setPlaylistState(prev => prev ? { ...prev, currentIndex: nextIndex } : null);
-    setCurrentTrack(items[nextIndex]);
-  }, [playlistState]);
+  const setIsPlaying = useCallback((playing: boolean) => {
+    setIsPlayingState(playing);
+  }, []);
 
   return (
     <PlayerContext.Provider
@@ -204,7 +279,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         isPlaying,
         isExpanded,
         playlistState,
-        player,
         currentTime,
         duration,
         setCurrentTrack,

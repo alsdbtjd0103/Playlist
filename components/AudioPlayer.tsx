@@ -1,23 +1,25 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  PanResponder,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import TrackPlayer, { useProgress } from 'react-native-track-player';
+import Slider from '@react-native-community/slider';
 import { usePlayer } from '../contexts/PlayerContext';
-import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
 interface AudioPlayerProps {
   onTrackEnd?: () => void;
-  // 플레이리스트 관련 props
   showPlaylistControls?: boolean;
   onPrevious?: () => void;
   onNext?: () => void;
   repeatMode?: 'none' | 'one' | 'all';
   onRepeatModeChange?: () => void;
+  shuffleMode?: boolean;
+  onShuffleModeChange?: () => void;
 }
 
 export default function AudioPlayer({
@@ -27,13 +29,16 @@ export default function AudioPlayer({
   onNext,
   repeatMode,
   onRepeatModeChange,
+  shuffleMode = false,
+  onShuffleModeChange,
 }: AudioPlayerProps) {
-  const { player, isPlaying, currentTime, duration, togglePlayPause, seekTo } = usePlayer();
-  const [progressWidth, setProgressWidth] = useState(0);
-  const [isSeeking, setIsSeeking] = useState(false);
-  const [seekPosition, setSeekPosition] = useState(0);
+  const { isPlaying, togglePlayPause, seekTo, currentTrack } = usePlayer();
+  const progress = useProgress(250);
+
   const hasEndedRef = useRef(false);
-  const wasPlayingRef = useRef(false);
+
+  const currentTime = progress.position;
+  const duration = progress.duration;
 
   // 곡 종료 감지
   React.useEffect(() => {
@@ -48,91 +53,66 @@ export default function AudioPlayer({
     hasEndedRef.current = false;
   }, [duration]);
 
-  const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt) => {
-      wasPlayingRef.current = isPlaying;
-      if (isPlaying && player) {
-        player.pause();
-      }
-      setIsSeeking(true);
-      const locationX = evt.nativeEvent.locationX;
-      const percentage = Math.max(0, Math.min(1, locationX / progressWidth));
-      setSeekPosition(percentage * duration);
-    },
-    onPanResponderMove: (evt) => {
-      const locationX = evt.nativeEvent.locationX;
-      const percentage = Math.max(0, Math.min(1, locationX / progressWidth));
-      setSeekPosition(percentage * duration);
-    },
-    onPanResponderRelease: () => {
-      seekTo(seekPosition);
-      setIsSeeking(false);
-      hasEndedRef.current = false;
-      if (wasPlayingRef.current && player) {
-        player.play();
-      }
-    },
-  }), [progressWidth, duration, player, seekPosition, isPlaying, seekTo]);
-
-  const handleStop = () => {
-    if (player) {
-      player.pause();
-      seekTo(0);
-    }
+  const skipBackward = async () => {
+    const newPosition = Math.max(currentTime - 10, 0);
+    await seekTo(newPosition);
   };
 
   const formatTime = (seconds: number) => {
     const totalSeconds = Math.floor(seconds);
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const displayPosition = isSeeking ? seekPosition : currentTime;
-  const progress = duration > 0 ? (displayPosition / duration) * 100 : 0;
+  if (!currentTrack) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
-      {/* 프로그레스 바 */}
-      <View
-        style={styles.progressContainer}
-        onLayout={(e) => setProgressWidth(e.nativeEvent.layout.width)}
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
-          <View style={[styles.progressThumb, isSeeking && styles.progressThumbActive, { left: `${progress}%` }]} />
-        </View>
-        <View style={styles.timeInfo}>
-          <Text style={styles.timeText}>{formatTime(displayPosition)}</Text>
-          <Text style={styles.timeText}>{formatTime(duration)}</Text>
-        </View>
+      {/* 슬라이더 */}
+      <Slider
+        style={styles.slider}
+        minimumValue={0}
+        maximumValue={duration}
+        value={currentTime}
+        onSlidingComplete={async (value) => {
+          await seekTo(value);
+        }}
+        minimumTrackTintColor="#fff"
+        maximumTrackTintColor="#888"
+        thumbTintColor="#fff"
+      />
+
+      {/* 시간 표시 */}
+      <View style={styles.timeRow}>
+        <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+        <Text style={styles.timeText}>{formatTime(duration)}</Text>
       </View>
 
       {/* 컨트롤 버튼 */}
       <View style={styles.controls}>
         {showPlaylistControls ? (
-          <TouchableOpacity style={styles.secondaryButton} onPress={onRepeatModeChange}>
+          <TouchableOpacity onPress={onRepeatModeChange} style={styles.controlButton}>
             <Ionicons
               name="repeat"
-              size={20}
-              color={repeatMode !== 'none' ? colors.primary : colors.textSecondary}
+              size={28}
+              color={repeatMode !== 'none' ? '#fff' : '#666'}
             />
             {repeatMode === 'one' && (
               <Text style={styles.repeatOneText}>1</Text>
             )}
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleStop}>
-            <Ionicons name="stop" size={20} color={colors.textSecondary} />
+          <TouchableOpacity onPress={skipBackward} style={styles.controlButton}>
+            <Ionicons name="play-back" size={36} color="#e5e5e5" />
           </TouchableOpacity>
         )}
 
         {showPlaylistControls && (
-          <TouchableOpacity style={styles.secondaryButton} onPress={onPrevious}>
-            <Ionicons name="play-skip-back" size={20} color={colors.textPrimary} />
+          <TouchableOpacity onPress={onPrevious} style={styles.controlButton}>
+            <Ionicons name="play-skip-back" size={36} color="#e5e5e5" />
           </TouchableOpacity>
         )}
 
@@ -143,25 +123,25 @@ export default function AudioPlayer({
         >
           <Ionicons
             name={isPlaying ? 'pause' : 'play'}
-            size={28}
-            color={colors.background}
-            style={isPlaying ? {} : { marginLeft: 3 }}
+            size={40}
+            color="#000"
+            style={isPlaying ? {} : { marginLeft: 4 }}
           />
         </TouchableOpacity>
 
         {showPlaylistControls && (
-          <TouchableOpacity style={styles.secondaryButton} onPress={onNext}>
-            <Ionicons name="play-skip-forward" size={20} color={colors.textPrimary} />
+          <TouchableOpacity onPress={onNext} style={styles.controlButton}>
+            <Ionicons name="play-skip-forward" size={36} color="#e5e5e5" />
           </TouchableOpacity>
         )}
 
-        {showPlaylistControls ? (
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleStop}>
-            <Ionicons name="stop" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.secondaryButton} />
-        )}
+        <TouchableOpacity onPress={onShuffleModeChange} style={styles.controlButton}>
+          <Ionicons 
+            name="shuffle" 
+            size={28} 
+            color={shuffleMode ? '#fff' : '#666'} 
+          />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -169,80 +149,55 @@ export default function AudioPlayer({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    gap: spacing.lg,
+    gap: 12,
   },
-  progressContainer: {
-    gap: spacing.sm,
+  slider: {
+    width: '100%',
+    height: 40,
   },
-  progressBar: {
-    height: 4,
-    backgroundColor: colors.surfaceLighter,
-    borderRadius: borderRadius.full,
-    overflow: 'visible',
-    position: 'relative',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.textPrimary,
-    borderRadius: borderRadius.full,
-  },
-  progressThumb: {
-    position: 'absolute',
-    top: -4,
-    width: 12,
-    height: 12,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.textPrimary,
-    marginLeft: -6,
-  },
-  progressThumbActive: {
-    width: 16,
-    height: 16,
-    top: -6,
-    marginLeft: -8,
-  },
-  timeInfo: {
+  timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginTop: -8,
   },
   timeText: {
-    ...typography.caption,
-    color: colors.textTertiary,
-    fontVariant: ['tabular-nums'],
+    color: '#e5e5e5',
+    fontSize: 14,
+    fontWeight: '500',
   },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    paddingHorizontal: spacing.sm,
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   playButton: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
+    width: 70,
+    height: 70,
+    backgroundColor: '#ffffff',
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  secondaryButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
+  controlButton: {
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
   },
   repeatOneText: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
-    fontSize: 8,
+    bottom: 8,
+    right: 8,
+    fontSize: 10,
     fontWeight: '700',
-    color: colors.primary,
+    color: '#fff',
   },
 });

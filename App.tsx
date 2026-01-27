@@ -6,7 +6,12 @@ import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/b
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import TrackPlayer from 'react-native-track-player';
+import { PlaybackService } from './services/PlaybackService';
 import { RootStackParamList } from './types';
+
+// TrackPlayer 백그라운드 서비스 등록
+TrackPlayer.registerPlaybackService(() => PlaybackService);
 
 import HomeScreen from './screens/HomeScreen';
 import SongDetailScreen from './screens/SongDetailScreen';
