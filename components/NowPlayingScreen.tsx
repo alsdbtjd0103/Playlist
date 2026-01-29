@@ -15,8 +15,9 @@ import { usePlayer } from '../contexts/PlayerContext';
 import AudioPlayer from './AudioPlayer';
 import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
+const ALBUM_ART_SIZE = Math.min(SCREEN_WIDTH - 60, SCREEN_HEIGHT * 0.35);
 
 export default function NowPlayingScreen() {
   const {
@@ -112,6 +113,7 @@ export default function NowPlayingScreen() {
         {
           transform: [{ translateY }],
           paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         },
       ]}
       {...panResponder.panHandlers}
@@ -131,8 +133,8 @@ export default function NowPlayingScreen() {
 
       {/* 앨범 아트 */}
       <View style={styles.albumArtContainer}>
-        <View style={styles.albumArt}>
-          <Ionicons name="musical-notes" size={120} color="#404040" />
+        <View style={[styles.albumArt, { width: ALBUM_ART_SIZE, height: ALBUM_ART_SIZE }]}>
+          <Ionicons name="musical-notes" size={Math.min(120, ALBUM_ART_SIZE * 0.3)} color="#404040" />
         </View>
       </View>
 
@@ -222,9 +224,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   albumArt: {
-    width: '100%',
-    maxWidth: 400,
-    height: 400,
     borderRadius: 20,
     backgroundColor: '#1a1a1a',
     justifyContent: 'center',

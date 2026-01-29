@@ -6,6 +6,7 @@ import TrackPlayer, {
   useProgress,
   RepeatMode,
   Capability,
+  AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
 import { Song, Version } from '../types';
 
@@ -92,6 +93,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             Capability.SkipToNext,
             Capability.SkipToPrevious,
           ],
+          android: {
+            appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+          },
         });
 
         isPlayerSetup = true;

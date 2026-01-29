@@ -40,6 +40,7 @@ export function useRecording(): UseRecordingReturn {
         await setAudioModeAsync({
           playsInSilentMode: true,
           allowsRecording: true,
+          staysActiveInBackground: true,
         });
       } catch (error) {
         console.error('오디오 모드 설정 실패:', error);

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRecording } from '../hooks/useRecording';
+import { usePlayer } from '../contexts/PlayerContext';
 import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
 interface RecorderModalProps {
@@ -33,9 +34,19 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
     checkPermissions,
   } = useRecording();
 
+  const { isPlaying, togglePlayPause } = usePlayer();
+
   const [rating, setRating] = useState(3);
   const [memo, setMemo] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // 녹음 시작 시 플레이어 중지
+  const handleStartRecording = async () => {
+    if (isPlaying) {
+      await togglePlayPause();
+    }
+    await startRecording();
+  };
 
   useEffect(() => {
     if (visible) {
@@ -117,7 +128,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
               <View style={styles.startContainer}>
                 <TouchableOpacity
                   style={styles.startButton}
-                  onPress={startRecording}
+                  onPress={handleStartRecording}
                   disabled={checkingPermission}
                   activeOpacity={0.8}
                 >
