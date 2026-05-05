@@ -9,6 +9,8 @@ import {
   Alert,
   ScrollView,
   Modal,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -36,6 +38,7 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
   const [availableSongs, setAvailableSongs] = useState<{ song: Song; versions: Version[] }[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'default' | 'title' | 'ratingDesc' | 'ratingAsc'>('default');
   const { setPlaylist, playlistState } = usePlayer();
 
   useFocusEffect(
@@ -120,8 +123,47 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
     }
   };
 
+  const sortLabels = {
+    default: '기본 순서',
+    title: '제목순',
+    ratingDesc: '별점 높은 순',
+    ratingAsc: '별점 낮은 순',
+  };
+
+  const handleSortPress = () => {
+    const options = ['기본 순서', '제목순', '별점 높은 순', '별점 낮은 순', '취소'];
+    const sortKeys: Array<'default' | 'title' | 'ratingDesc' | 'ratingAsc'> = ['default', 'title', 'ratingDesc', 'ratingAsc'];
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex: 4, title: '정렬 기준' },
+        (idx) => { if (idx < 4) setSortOrder(sortKeys[idx]); }
+      );
+    } else {
+      Alert.alert(
+        '정렬 기준',
+        undefined,
+        [
+          ...sortKeys.map((key, i) => ({ text: options[i], onPress: () => setSortOrder(key) })),
+          { text: '취소', style: 'cancel' as const },
+        ]
+      );
+    }
+  };
+
+  const getSortedItems = (items: PlaylistItem[]) => {
+    if (sortOrder === 'default') return items;
+    return [...items].sort((a, b) => {
+      if (sortOrder === 'title') return a.song.title.localeCompare(b.song.title, 'ko');
+      if (sortOrder === 'ratingDesc') return b.version.rating - a.version.rating;
+      if (sortOrder === 'ratingAsc') return a.version.rating - b.version.rating;
+      return 0;
+    });
+  };
+
   const handleTrackPress = (index: number) => {
-    const playlistItems = playlist.items.map((item: PlaylistItem) => ({
+    const sortedItems = getSortedItems(playlist.items);
+    const playlistItems = sortedItems.map((item: PlaylistItem) => ({
       song: item.song,
       version: item.version,
     }));
@@ -206,14 +248,22 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
           <Ionicons name="musical-notes" size={20} color={colors.primary} />
           <Text style={styles.logoText}>Playlist</Text>
         </View>
-        {!playlist.isDefault && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleOpenAddModal}
-          >
-            <Ionicons name="add" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-        )}
+        <View style={styles.headerActions}>
+          {playlist.items.length > 0 && (
+            <TouchableOpacity style={styles.sortButton} onPress={handleSortPress}>
+              <Ionicons name="funnel-outline" size={18} color={colors.textPrimary} />
+              <Text style={styles.sortButtonText}>{sortLabels[sortOrder]}</Text>
+            </TouchableOpacity>
+          )}
+          {!playlist.isDefault && (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleOpenAddModal}
+            >
+              <Ionicons name="add" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {playlist.items.length === 0 ? (
@@ -253,7 +303,7 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
 
           <View style={styles.trackListSection}>
             <FlatList
-              data={playlist.items}
+              data={getSortedItems(playlist.items)}
               renderItem={renderTrackItem}
               keyExtractor={(item) => item.id}
               scrollEnabled={false}
@@ -563,6 +613,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
     marginTop: spacing.xl,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sortButtonText: {
+    ...typography.caption,
+    color: colors.textPrimary,
+    fontWeight: '500',
   },
   addButton: {
     width: 40,

@@ -80,6 +80,7 @@ const SongItem = ({
 
 export default function HomeScreen({ navigation }: Props) {
   const [songs, setSongs] = useState<SongWithVersions[] | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
@@ -186,6 +187,12 @@ export default function HomeScreen({ navigation }: Props) {
     setMenuState((prev) => ({ ...prev, visible: false }));
   };
 
+  const filteredSongs = songs
+    ? songs.filter((song) =>
+        song.title.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : [];
+
   const renderSongCard = ({ item }: { item: SongWithVersions }) => {
     return (
       <SongItem
@@ -208,6 +215,26 @@ export default function HomeScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScreenHeader onAddPress={() => setModalVisible(true)} />
 
+      {/* 검색 바 */}
+      {songs.length > 0 && (
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={18} color={colors.textTertiary} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="제목으로 검색"
+            placeholderTextColor={colors.textTertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {songs.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconContainer}>
@@ -224,11 +251,16 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
-          data={songs}
+          data={filteredSongs}
           renderItem={renderSongCard}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.searchEmptyContainer}>
+              <Text style={styles.searchEmptyText}>"{searchQuery}"에 대한 결과가 없습니다</Text>
+            </View>
+          }
         />
       )}
 
@@ -508,6 +540,36 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchIcon: {
+    flexShrink: 0,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: typography.body.fontSize,
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  searchEmptyContainer: {
+    alignItems: "center",
+    paddingTop: spacing.xxl,
+  },
+  searchEmptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
   },
   menuOverlay: {
     flex: 1,

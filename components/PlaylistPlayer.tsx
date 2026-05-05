@@ -112,33 +112,24 @@ export default function PlaylistPlayer({
   };
 
   const handlePrevious = () => {
+    player.pause();
+    setCurrentTime(0);
     if (currentIndex > 0) {
-      player.pause();
-      setCurrentTime(0);
       onIndexChange(currentIndex - 1);
-    } else if (repeatMode === 'all') {
-      // 전체 반복 모드에서 첫 곡에서 이전을 누르면 마지막 곡으로
-      player.pause();
-      setCurrentTime(0);
+    } else {
+      // 첫 곡에서 이전 → 마지막 곡으로
       onIndexChange(playlist.length - 1);
     }
   };
 
   const handleNext = () => {
+    player.pause();
+    setCurrentTime(0);
     if (currentIndex < playlist.length - 1) {
-      player.pause();
-      setCurrentTime(0);
       onIndexChange(currentIndex + 1);
-    } else if (repeatMode === 'all') {
-      // 전체 반복 모드에서 마지막 곡에서 다음을 누르면 첫 곡으로
-      player.pause();
-      setCurrentTime(0);
-      onIndexChange(0);
     } else {
-      // 반복 모드가 아니면 정지
-      player.pause();
-      player.seekTo(0);
-      setCurrentTime(0);
+      // 마지막 곡에서 다음 → 첫 곡으로
+      onIndexChange(0);
     }
   };
 
@@ -214,13 +205,12 @@ export default function PlaylistPlayer({
         <TouchableOpacity
           style={styles.controlButton}
           onPress={handlePrevious}
-          disabled={currentIndex === 0 && repeatMode !== 'all'}
           activeOpacity={0.5}
         >
           <Ionicons
             name="play-skip-back"
             size={32}
-            color={currentIndex === 0 && repeatMode !== 'all' ? colors.textTertiary : colors.textPrimary}
+            color={colors.textPrimary}
           />
         </TouchableOpacity>
 
@@ -242,13 +232,12 @@ export default function PlaylistPlayer({
         <TouchableOpacity
           style={styles.controlButton}
           onPress={handleNext}
-          disabled={currentIndex === playlist.length - 1 && repeatMode !== 'all'}
           activeOpacity={0.5}
         >
           <Ionicons
             name="play-skip-forward"
             size={32}
-            color={currentIndex === playlist.length - 1 && repeatMode !== 'all' ? colors.textTertiary : colors.textPrimary}
+            color={colors.textPrimary}
           />
         </TouchableOpacity>
 
