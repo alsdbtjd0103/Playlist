@@ -445,7 +445,6 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     fontSize: 20,
     letterSpacing: -0.8,
     color: colors.text,
-    letterSpacing: -0.5,
   },
   songHeader: {
     alignItems: 'center',
