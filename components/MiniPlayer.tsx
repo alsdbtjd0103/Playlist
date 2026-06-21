@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayer } from '../contexts/PlayerContext';
-import { colors, spacing, typography } from '../lib/theme';
+import { useTheme } from '../contexts/ThemeContext';
+import { ColorTokens, spacing, typography } from '../lib/theme';
 
 export default function MiniPlayer() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { currentTrack, isPlaying, isExpanded, expandPlayer, closePlayer, togglePlayPause } = usePlayer();
 
   if (!currentTrack || isExpanded) {
@@ -18,7 +21,7 @@ export default function MiniPlayer() {
       activeOpacity={0.9}
     >
       <View style={styles.thumbnail}>
-        <Ionicons name="musical-notes" size={20} color={colors.textSecondary} />
+        <Ionicons name="musical-notes" size={20} color={colors.accent} />
       </View>
 
       <View style={styles.info}>
@@ -40,25 +43,25 @@ export default function MiniPlayer() {
           <Ionicons
             name={isPlaying ? 'pause' : 'play'}
             size={24}
-            color={colors.textPrimary}
+            color={colors.accent}
           />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.controlButton}
           onPress={closePlayer}
         >
-          <Ionicons name="close" size={24} color={colors.textSecondary} />
+          <Ionicons name="close" size={24} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderTopWidth: 1,
@@ -69,7 +72,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -80,11 +83,11 @@ const styles = StyleSheet.create({
   title: {
     ...typography.body,
     fontWeight: '500',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   artist: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   controls: {
     flexDirection: 'row',

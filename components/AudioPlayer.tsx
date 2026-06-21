@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import TrackPlayer, { useProgress } from 'react-native-track-player';
 import Slider from '@react-native-community/slider';
 import { usePlayer } from '../contexts/PlayerContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { ColorTokens } from '../lib/theme';
 
 interface AudioPlayerProps {
   onTrackEnd?: () => void;
@@ -33,6 +35,8 @@ export default function AudioPlayer({
   onShuffleModeChange,
 }: AudioPlayerProps) {
   const { isPlaying, togglePlayPause, seekTo, currentTrack } = usePlayer();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const progress = useProgress(250);
 
   const hasEndedRef = useRef(false);
@@ -80,9 +84,9 @@ export default function AudioPlayer({
         onSlidingComplete={async (value) => {
           await seekTo(value);
         }}
-        minimumTrackTintColor="#fff"
-        maximumTrackTintColor="#888"
-        thumbTintColor="#fff"
+        minimumTrackTintColor={colors.accent}
+        maximumTrackTintColor={colors.border}
+        thumbTintColor={colors.accent}
       />
 
       {/* 시간 표시 */}
@@ -98,7 +102,7 @@ export default function AudioPlayer({
             <Ionicons
               name="repeat"
               size={28}
-              color={repeatMode !== 'none' ? '#fff' : '#666'}
+              color={repeatMode !== 'none' ? colors.accent : colors.textMuted}
             />
             {repeatMode === 'one' && (
               <Text style={styles.repeatOneText}>1</Text>
@@ -106,13 +110,13 @@ export default function AudioPlayer({
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={skipBackward} style={styles.controlButton}>
-            <Ionicons name="play-back" size={36} color="#e5e5e5" />
+            <Ionicons name="play-back" size={36} color={colors.text} />
           </TouchableOpacity>
         )}
 
         {showPlaylistControls && (
           <TouchableOpacity onPress={onPrevious} style={styles.controlButton}>
-            <Ionicons name="play-skip-back" size={36} color="#e5e5e5" />
+            <Ionicons name="play-skip-back" size={36} color={colors.text} />
           </TouchableOpacity>
         )}
 
@@ -124,22 +128,22 @@ export default function AudioPlayer({
           <Ionicons
             name={isPlaying ? 'pause' : 'play'}
             size={40}
-            color="#000"
+            color={colors.onAccent}
             style={isPlaying ? {} : { marginLeft: 4 }}
           />
         </TouchableOpacity>
 
         {showPlaylistControls && (
           <TouchableOpacity onPress={onNext} style={styles.controlButton}>
-            <Ionicons name="play-skip-forward" size={36} color="#e5e5e5" />
+            <Ionicons name="play-skip-forward" size={36} color={colors.text} />
           </TouchableOpacity>
         )}
 
         <TouchableOpacity onPress={onShuffleModeChange} style={styles.controlButton}>
           <Ionicons 
-            name="shuffle" 
-            size={28} 
-            color={shuffleMode ? '#fff' : '#666'} 
+            name="shuffle"
+            size={28}
+            color={shuffleMode ? colors.accent : colors.textMuted}
           />
         </TouchableOpacity>
       </View>
@@ -147,7 +151,7 @@ export default function AudioPlayer({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   container: {
     gap: 12,
   },
@@ -162,7 +166,7 @@ const styles = StyleSheet.create({
     marginTop: -8,
   },
   timeText: {
-    color: '#e5e5e5',
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -175,7 +179,7 @@ const styles = StyleSheet.create({
   playButton: {
     width: 70,
     height: 70,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.accentStrong,
     borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
@@ -198,6 +202,6 @@ const styles = StyleSheet.create({
     right: 8,
     fontSize: 10,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.accent,
   },
 });
