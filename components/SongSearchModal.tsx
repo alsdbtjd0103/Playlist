@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, FlatList,
   ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
@@ -9,7 +9,8 @@ import { searchTracks, ITunesTrack } from '../lib/itunes';
 import { matchesSearch } from '../lib/search';
 import { Song } from '../types';
 import { AlbumArt } from './AlbumArt';
-import { colors, spacing, borderRadius, typography } from '../lib/theme';
+import { useTheme } from '../contexts/ThemeContext';
+import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
 
 interface Props {
   visible: boolean;
@@ -18,6 +19,8 @@ interface Props {
 }
 
 export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [localSongs, setLocalSongs] = useState<Song[]>([]);
   const [results, setResults] = useState<ITunesTrack[]>([]);
@@ -101,7 +104,7 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
           <View style={styles.header}>
             <Text style={styles.title}>{mode === 'manual' ? '직접 추가' : '곡 추가'}</Text>
             <TouchableOpacity onPress={onClose} testID="search-close-button">
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
+              <Ionicons name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -109,12 +112,12 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
             <View>
               <TextInput
                 testID="manual-title-input"
-                style={styles.input} placeholder="곡 제목" placeholderTextColor={colors.textTertiary}
+                style={styles.input} placeholder="곡 제목" placeholderTextColor={colors.textMuted}
                 value={manualTitle} onChangeText={setManualTitle} editable={!busy}
               />
               <TextInput
                 testID="manual-artist-input"
-                style={styles.input} placeholder="아티스트 (선택)" placeholderTextColor={colors.textTertiary}
+                style={styles.input} placeholder="아티스트 (선택)" placeholderTextColor={colors.textMuted}
                 value={manualArtist} onChangeText={setManualArtist} editable={!busy}
               />
               <View style={styles.manualButtons}>
@@ -122,17 +125,17 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
                   <Text style={styles.btnGhostText}>검색으로</Text>
                 </TouchableOpacity>
                 <TouchableOpacity testID="manual-submit-button" style={[styles.btn, styles.btnPrimary]} onPress={handleManualSubmit} disabled={busy}>
-                  {busy ? <ActivityIndicator color={colors.background} /> : <Text style={styles.btnPrimaryText}>추가</Text>}
+                  {busy ? <ActivityIndicator color={colors.onAccent} /> : <Text style={styles.btnPrimaryText}>추가</Text>}
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             <>
               <View style={styles.searchBar}>
-                <Ionicons name="search" size={18} color={colors.textTertiary} />
+                <Ionicons name="search" size={18} color={colors.textMuted} />
                 <TextInput
                   testID="song-search-input"
-                  style={styles.searchInput} placeholder="곡 제목 또는 가수로 검색" placeholderTextColor={colors.textTertiary}
+                  style={styles.searchInput} placeholder="곡 제목 또는 가수로 검색" placeholderTextColor={colors.textMuted}
                   value={query} onChangeText={setQuery} autoFocus returnKeyType="search"
                 />
               </View>
@@ -153,7 +156,7 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
                               <Text style={styles.rowTitle} numberOfLines={1}>{s.title}</Text>
                               {s.artist ? <Text style={styles.rowSub} numberOfLines={1}>{s.artist}</Text> : null}
                             </View>
-                            <Ionicons name="arrow-forward" size={16} color={colors.textTertiary} />
+                            <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -161,7 +164,7 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
 
                     <View style={styles.section}>
                       <Text style={styles.sectionTitle}>검색 결과</Text>
-                      {loading && <ActivityIndicator color={colors.primary} style={{ paddingVertical: spacing.lg }} />}
+                      {loading && <ActivityIndicator color={colors.accentStrong} style={{ paddingVertical: spacing.lg }} />}
                       {!loading && error && <Text style={styles.muted}>검색 결과를 불러오지 못했어요</Text>}
                       {!loading && !error && query.trim().length > 0 && filteredResults.length === 0 && (
                         <Text style={styles.muted}>검색 결과가 없어요</Text>
@@ -173,13 +176,13 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
                             <Text style={styles.rowTitle} numberOfLines={1}>{t.trackName}</Text>
                             <Text style={styles.rowSub} numberOfLines={1}>{t.artistName}</Text>
                           </View>
-                          <Ionicons name="add" size={18} color={colors.textSecondary} />
+                          <Ionicons name="add" size={18} color={colors.textMuted} />
                         </TouchableOpacity>
                       ))}
                     </View>
 
                     <TouchableOpacity testID="manual-add-button" style={styles.manualLink} onPress={openManual}>
-                      <Ionicons name="create-outline" size={18} color={colors.primary} />
+                      <Ionicons name="create-outline" size={18} color={colors.accentStrong} />
                       <Text style={styles.manualLinkText}>찾는 곡이 없나요? 직접 추가</Text>
                     </TouchableOpacity>
                   </View>
@@ -193,27 +196,27 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: borderRadius.xl, borderTopRightRadius: borderRadius.xl, padding: spacing.xl, maxHeight: '85%' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  title: { ...typography.h3, color: colors.textPrimary },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surfaceLight, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
-  searchInput: { flex: 1, ...typography.body, color: colors.textPrimary, padding: 0 },
+  title: { ...typography.h3, color: colors.text },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surfaceAlt, borderRadius: borderRadius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
+  searchInput: { flex: 1, ...typography.body, color: colors.text, padding: 0 },
   section: { marginBottom: spacing.lg },
-  sectionTitle: { ...typography.bodySmall, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm },
+  sectionTitle: { ...typography.bodySmall, fontWeight: '600', color: colors.textMuted, marginBottom: spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
   rowText: { flex: 1, gap: 2 },
-  rowTitle: { ...typography.body, fontWeight: '600', color: colors.textPrimary },
-  rowSub: { ...typography.bodySmall, color: colors.textSecondary },
-  muted: { ...typography.bodySmall, color: colors.textTertiary, paddingVertical: spacing.md },
+  rowTitle: { ...typography.body, fontWeight: '600', color: colors.text },
+  rowSub: { ...typography.bodySmall, color: colors.textMuted },
+  muted: { ...typography.bodySmall, color: colors.textMuted, paddingVertical: spacing.md },
   manualLink: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, justifyContent: 'center' },
-  manualLinkText: { ...typography.body, color: colors.primary, fontWeight: '600' },
-  input: { backgroundColor: colors.surfaceLight, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, ...typography.body, color: colors.textPrimary, marginBottom: spacing.md },
+  manualLinkText: { ...typography.body, color: colors.accentStrong, fontWeight: '600' },
+  input: { backgroundColor: colors.surfaceAlt, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, ...typography.body, color: colors.text, marginBottom: spacing.md },
   manualButtons: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
   btn: { flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.md, alignItems: 'center' },
-  btnGhost: { backgroundColor: colors.surfaceLight },
-  btnGhostText: { ...typography.body, fontWeight: '600', color: colors.textPrimary },
-  btnPrimary: { backgroundColor: colors.primary },
-  btnPrimaryText: { ...typography.body, fontWeight: '600', color: colors.background },
+  btnGhost: { backgroundColor: colors.surfaceAlt },
+  btnGhostText: { ...typography.body, fontWeight: '600', color: colors.text },
+  btnPrimary: { backgroundColor: colors.accentStrong },
+  btnPrimaryText: { ...typography.body, fontWeight: '600', color: colors.onAccent },
 });

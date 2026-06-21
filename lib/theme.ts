@@ -35,7 +35,7 @@ export const darkColors = {
   overlay: 'rgba(0,0,0,0.6)',
 } as const;
 
-export type ColorTokens = typeof lightColors;
+export type ColorTokens = { [K in keyof typeof lightColors]: string };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
