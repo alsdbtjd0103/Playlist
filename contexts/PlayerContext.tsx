@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import TrackPlayer, {
   State,
   Event,
@@ -53,6 +53,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [playlistState, setPlaylistState] = useState<PlaylistState | null>(null);
   const [isReady, setIsReady] = useState(false);
+
+  const trimEndHandledRef = useRef<string | null>(null);
 
   const playbackState = usePlaybackState();
   const progress = useProgress();
@@ -251,6 +253,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const trim = currentTrack?.version.trim;
     if (!trim || !isPlaying) return;
     if (isPastTrimEnd(progress.position, trim)) {
+      if (trimEndHandledRef.current === currentTrack.version.id) return; // already handled for this track
+      trimEndHandledRef.current = currentTrack.version.id;
       if (playlistState && playlistState.items.length > 1) {
         playNext();
       } else {
@@ -258,6 +262,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [progress.position, currentTrack, isPlaying, playlistState, playNext]);
+
+  // 트랙 변경 시 trim 종료 처리 플래그 초기화
+  useEffect(() => {
+    trimEndHandledRef.current = null;
+  }, [currentTrack?.version.id]);
 
   const playPrevious = useCallback(async () => {
     if (!playlistState) return;
