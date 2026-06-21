@@ -151,9 +151,9 @@ export default function PlaylistDetailScreen({ route }: Props) {
     }
   };
 
-  const currentPlayingIndex = playlistState && playlist && playlistState.items.length === playlist.items.length
-    ? playlistState.currentIndex
-    : -1;
+  const currentPlayingVersionId = playlistState
+    ? playlistState.items[playlistState.currentIndex]?.version.id ?? null
+    : null;
 
   const handleRemoveItem = (item: PlaylistItem) => {
     if (playlist.isDefault) {
@@ -195,7 +195,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
 
   const renderTrackItem = ({ item, getIndex, drag, isActive }: RenderItemParams<PlaylistItem>) => {
     const index = getIndex() ?? 0;
-    const isPlaying = index === currentPlayingIndex;
+    const isPlaying = item.versionId === currentPlayingVersionId;
 
     return (
       <ScaleDecorator activeScale={1.03}>
