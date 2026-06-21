@@ -24,7 +24,7 @@ import {
   getAllDefaultVersions,
   addToPlaylist,
 } from '../lib/database';
-import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
+import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import ScreenHeader from '../components/ScreenHeader';
 
@@ -299,6 +299,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     borderColor: colors.border,
   },
   sortButtonText: {
+    fontFamily: fontFamily.medium,
     fontSize: 12,
     color: colors.text,
     fontWeight: '500',

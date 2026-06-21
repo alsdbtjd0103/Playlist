@@ -11,7 +11,7 @@ import TrackPlayer, { useProgress } from 'react-native-track-player';
 import Slider from '@react-native-community/slider';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { ColorTokens } from '../lib/theme';
+import { ColorTokens, fontFamily } from '../lib/theme';
 
 interface AudioPlayerProps {
   onTrackEnd?: () => void;
@@ -166,6 +166,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     marginTop: -8,
   },
   timeText: {
+    fontFamily: fontFamily.medium,
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
@@ -201,6 +202,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     bottom: 8,
     right: 8,
     fontSize: 10,
+    fontFamily: fontFamily.bold,
     fontWeight: '700',
     color: colors.accent,
   },

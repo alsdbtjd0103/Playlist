@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlayer } from '../contexts/PlayerContext';
 import AudioPlayer from './AudioPlayer';
 import { useTheme } from '../contexts/ThemeContext';
-import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
+import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
@@ -246,6 +246,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     textAlign: 'center',
   },
   songArtist: {
+    fontFamily: fontFamily.regular,
     fontSize: 16,
     color: colors.textMuted,
   },
@@ -256,10 +257,12 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     marginTop: spacing.xs,
   },
   ratingText: {
+    fontFamily: fontFamily.regular,
     fontSize: 14,
     color: colors.textMuted,
   },
   trackIndicator: {
+    fontFamily: fontFamily.regular,
     fontSize: 12,
     color: colors.textMuted,
     marginTop: spacing.xs,
@@ -281,6 +284,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   },
   memoText: {
     flex: 1,
+    fontFamily: fontFamily.regular,
     fontSize: 14,
     color: colors.textMuted,
     lineHeight: 20,

@@ -588,6 +588,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     color: colors.text,
   },
   trackTitleActive: {
+    fontFamily: fontFamily.semibold,
     color: colors.text,
     fontWeight: '600',
   },

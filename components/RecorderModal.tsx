@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRecording } from '../hooks/useRecording';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
+import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 
 interface RecorderModalProps {
   visible: boolean;
@@ -345,6 +345,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     color: colors.textMuted,
   },
   recordingTime: {
+    fontFamily: fontFamily.bold,
     fontSize: 48,
     fontWeight: 'bold',
     color: colors.text,
