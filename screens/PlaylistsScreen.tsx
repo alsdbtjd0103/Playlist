@@ -178,6 +178,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
             </View>
           )}
           <FlatList
+            style={styles.list}
             data={getSortedPlaylists(playlists)}
             renderItem={renderPlaylistCard}
             keyExtractor={(item) => item.id}
@@ -269,6 +270,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     ...typography.body,
     color: colors.textSecondary,
+  },
+  list: {
+    flex: 1,
   },
   listContainer: {
     padding: spacing.lg,
