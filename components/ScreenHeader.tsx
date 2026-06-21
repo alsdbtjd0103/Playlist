@@ -19,6 +19,8 @@ export default function ScreenHeader({ onAddPress, showAddButton = true }: Scree
         <TouchableOpacity
           style={styles.iconButton}
           onPress={onAddPress}
+          testID="add-song-button"
+          accessibilityLabel="곡 추가"
         >
           <Ionicons name="add" size={24} color={colors.textPrimary} />
         </TouchableOpacity>

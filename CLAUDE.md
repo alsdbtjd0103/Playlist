@@ -34,6 +34,35 @@ npm run android
 npm run web
 ```
 
+## 테스트
+
+테스트는 3계층 구조입니다. 유닛/컴포넌트 테스트는 터미널에서 헤드리스로 돌아가므로
+코드 수정 후 `npm test`로 빠르게 검증할 수 있습니다.
+
+```bash
+# 유닛 + 컴포넌트 테스트 (Jest, jest-expo preset)
+npm test
+npm run test:watch      # 변경 감지 모드
+npm run test:coverage   # 커버리지 리포트
+
+# E2E 테스트 (Maestro) — 시뮬레이터 + dev build 필요. .maestro/README.md 참고
+npm run e2e
+```
+
+### 구조
+
+- `jest.config.js` / `jest.setup.js` — Jest 설정, AsyncStorage·아이콘 인메모리 목
+- `__tests__/database.test.ts` — `lib/database.ts` CRUD/정렬/동기화 로직 (목 AsyncStorage)
+- `__tests__/ScreenHeader.test.tsx` — 컴포넌트 렌더/인터랙션 (React Native Testing Library)
+- `.maestro/*.yaml` — 실기기 E2E 플로우 (smoke, 곡 추가)
+
+### 규칙
+
+- 외부 모듈(AsyncStorage, expo-audio, react-native-track-player, @expo/vector-icons)은 `jest.setup.js` 또는 테스트 내에서 **목 처리**한다.
+- 시간 의존(정렬) 테스트는 `jest.useFakeTimers()` + `jest.advanceTimersByTime()`으로 결정론적으로 만든다.
+- `@testing-library/react-native`는 v13 라인 사용 (v14는 새 `test-renderer` 의존성으로 jest-expo 54와 비호환).
+- E2E에서 잡아야 하는 UI 요소에는 `testID`를 부여한다 (예: `add-song-button`).
+
 ## 환경 변수 설정
 
 이 프로젝트는 로컬 저장소를 사용하므로 별도의 환경 변수 설정이 필요하지 않습니다.

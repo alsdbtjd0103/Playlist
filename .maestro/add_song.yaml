@@ -1,0 +1,27 @@
+# E2E: 곡 추가 플로우
+# 깨끗한 상태로 시작 -> 곡 추가 모달 -> 제목 입력 -> "추가" -> 목록에 노출 확인
+# 실행: maestro test .maestro/add_song.yaml
+appId: com.playlist.app
+---
+- launchApp:
+    clearState: true
+
+# 빈 상태 안내 확인
+- assertVisible: "아직 등록된 곡이 없습니다"
+
+# 헤더의 + 버튼 탭
+# (아이콘 버튼이라 텍스트가 없으므로 testID 권장 — README의 "테스트 가능성 개선" 참고)
+- tapOn:
+    id: "add-song-button"
+
+# 새 곡 모달
+- assertVisible: "새 곡"
+- tapOn: "예: 좋은날"
+- inputText: "테스트곡 E2E"
+- tapOn: "예: 아이유"
+- inputText: "테스트가수"
+- tapOn: "추가"
+
+# 목록에 추가된 곡이 보이는지 확인
+- assertVisible: "테스트곡 E2E"
+- assertVisible: "테스트가수"

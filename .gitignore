@@ -32,3 +32,8 @@ yarn-error.*
 
 # TypeScript
 *.tsbuildinfo
+
+# Tests
+coverage/
+.maestro/**/*.log
+maestro-*.log

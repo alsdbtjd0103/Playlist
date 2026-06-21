@@ -1,0 +1,8 @@
+# 스모크 테스트: 앱이 켜지고 홈 화면이 뜨는지 확인
+# 실행: maestro test .maestro/smoke.yaml
+appId: com.playlist.app
+---
+- launchApp:
+    clearState: true
+# 로고 또는 빈 상태 안내 문구 중 하나가 보이면 홈 화면 진입 성공
+- assertVisible: "Playlist"
