@@ -107,7 +107,7 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
           <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>구간 편집</Text>
-        <TouchableOpacity onPress={handleOverwrite} style={styles.overwriteButton}>
+        <TouchableOpacity onPress={handleOverwrite} style={styles.overwriteButton} testID="trim-overwrite-button">
           <Text style={styles.overwriteText}>덮어쓰기</Text>
         </TouchableOpacity>
       </View>
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   lenText: { ...typography.body, color: colors.textSecondary },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between', width: 340 },
-  timeText: { ...typography.bodySmall, color: colors.textTertiary },
+  timeText: { ...typography.bodySmall, color: colors.textTertiary, fontVariant: ['tabular-nums'] },
   previewButton: {
     flexDirection: 'row',
     alignItems: 'center',
