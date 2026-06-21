@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>plilog — 심플하고 따뜻한 무드 (v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Gowun+Dodum&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Manrope", -apple-system, sans-serif;
+    background: #15120f; color: #efe6d6; padding: 48px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .intro { max-width: 1180px; margin: 0 auto 18px; text-align: center; }
+  .intro h1 { font-family:"Manrope",sans-serif; font-weight: 800; font-size: 32px; letter-spacing:-0.6px; margin-bottom: 10px; color:#f6ecdb; }
+  .intro p { color:#b6a892; font-size: 15.5px; line-height: 1.65; max-width: 760px; margin: 0 auto; }
+  .notes { max-width: 1180px; margin: 0 auto 34px; display:flex; gap: 12px; justify-content:center; flex-wrap: wrap; }
+  .badge { padding: 8px 16px; background:#221c16; border:1px solid #34291f; border-radius: 999px; font-size: 13px; font-weight: 700; color:#e9c987; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; }
+  @media (max-width: 920px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel { border-radius: 22px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); background:#1a1610; display:flex; flex-direction:column; }
+  .panel-head { padding: 22px 24px 4px; }
+  .panel-num { font-weight: 800; font-size: 12px; letter-spacing: 1.5px; color:#8a7c69; }
+  .panel-title { font-weight: 700; font-size: 22px; margin: 3px 0 4px; color:#f3e9d8; letter-spacing:-0.3px; }
+  .panel-keys { font-size: 13.5px; color:#a99b86; line-height: 1.5; }
+  .stage { padding: 24px; display:flex; gap: 22px; align-items:flex-start; flex-wrap: wrap; }
+
+  .phone { width: 262px; flex: 0 0 262px; border-radius: 34px; padding: 9px; background: linear-gradient(160deg,#383838,#0b0b0b); box-shadow: 0 18px 40px rgba(0,0,0,0.5); }
+  .screen { border-radius: 27px; overflow: hidden; height: 512px; display:flex; flex-direction:column; background: var(--bg); color: var(--text); position: relative; font-family: var(--font-body, "Manrope"); }
+  .screen::before { content:""; position:absolute; inset:0; pointer-events:none; background: var(--texture, none); opacity: var(--tex-op, 0); }
+
+  .statusbar { display:flex; justify-content:space-between; align-items:center; padding: 12px 18px 4px; font-size: 12px; font-weight: 700; color: var(--text); opacity:.85; }
+  .apphead { display:flex; align-items:center; justify-content:space-between; padding: 8px 18px 6px; }
+  .logo { display:flex; align-items:center; gap: 8px; }
+  .wave { display:flex; align-items:flex-end; gap: 2.5px; height: 22px; }
+  .wave span { width: 3px; border-radius: 3px; background: var(--accent); display:block; }
+  .wordmark { font-family: var(--font-logo, "Manrope"); font-weight: var(--logo-weight,800); font-size: 21px; color: var(--logo-color, var(--text)); letter-spacing: var(--logo-spacing,-0.5px); }
+  .addbtn { width: 34px; height: 34px; border-radius: 11px; background: var(--accent-soft, rgba(0,0,0,.05)); display:flex; align-items:center; justify-content:center; color: var(--accent-ink, var(--accent)); font-size: 21px; font-weight: 600; line-height: 0; }
+
+  .search { margin: 8px 16px 4px; height: 38px; border-radius: var(--r-pill,12px); background: var(--surface); border: 1px solid var(--line); display:flex; align-items:center; padding: 0 14px; gap: 9px; color: var(--muted); font-size: 13px; box-shadow: var(--card-shadow,none); }
+  .search .mag { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--muted); position: relative; flex:0 0 auto; }
+  .search .mag::after { content:""; position:absolute; width:6px; height:2px; background: var(--muted); transform: rotate(45deg); right:-4px; bottom:-1px; border-radius: 2px; }
+
+  .list { padding: 8px 16px; display:flex; flex-direction:column; gap: 10px; flex:1; overflow:hidden; }
+  .card { display:flex; align-items:center; gap: 12px; padding: 11px; border-radius: var(--r-card,14px); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow,none); }
+  .thumb { width: 42px; height: 42px; border-radius: var(--r-thumb,11px); flex:0 0 42px; background: var(--thumb-bg); display:flex; align-items:center; justify-content:center; }
+  .note { width: 15px; height: 15px; border-radius: 50%; background: var(--accent); position: relative; }
+  .note::before { content:""; position:absolute; width: 3px; height: 12px; background: var(--accent); right: 1px; bottom: 7px; border-radius: 2px; }
+  .meta { flex:1; min-width:0; }
+  .t1 { font-weight: 700; font-size: 14.5px; color: var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family: var(--font-title, var(--font-body)); }
+  .t2 { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .stars { display:flex; align-items:center; gap: 3px; font-size: 11px; color: var(--muted); font-weight: 700; }
+  .star { color: var(--accent2, var(--accent)); font-size: 12px; }
+
+  .nowbar { margin: 4px 12px 8px; border-radius: var(--r-card,14px); background: var(--now-bg, var(--surface)); border: 1px solid var(--line); display:flex; align-items:center; gap: 10px; padding: 9px 12px; box-shadow: var(--card-shadow,none); }
+  .nowbar .nt { flex:1; min-width:0; }
+  .nowbar .nt .a { font-weight: 700; font-size: 12.5px; color: var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .nowbar .nt .b { font-size: 11px; color: var(--muted); }
+  .play { width: 34px; height: 34px; border-radius: 50%; background: var(--play-bg, var(--accent)); display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .play .tri { width: 0; height: 0; border-left: 11px solid var(--play-ink, #fff); border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 3px; }
+
+  .tabbar { display:flex; border-top: 1px solid var(--line); background: var(--tab-bg, var(--surface)); }
+  .tab { flex:1; text-align:center; padding: 10px 0 14px; font-size: 11px; font-weight: 700; color: var(--muted); }
+  .tab.on { color: var(--accent-ink, var(--accent)); }
+  .tab .ico { font-size: 16px; display:block; margin-bottom: 3px; }
+
+  .side { flex:1; min-width: 200px; padding-top: 2px; }
+  .moodstrip { height: 60px; border-radius: 14px; margin-bottom: 16px; }
+  .swatches { display:flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .sw { display:flex; flex-direction:column; gap: 5px; align-items:center; }
+  .chip { width: 44px; height: 44px; border-radius: 11px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+  .sw small { font-size: 10px; color:#9a8c78; font-family: ui-monospace, monospace; }
+  .reflist { font-size: 13px; color:#b8aa94; line-height: 1.7; }
+  .reflist b { color:#e9d9bf; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>plilog — 심플하고 따뜻한 무드 (v2)</h1>
+    <p>귀여움/통통함을 덜어내고 <b>어른스러운 미니멀 + 따뜻함</b>으로 다시 잡았습니다. 깔끔한 폰트, 절제된 모서리, 포인트 색 하나.</p>
+  </div>
+  <div class="notes">
+    <span class="badge">덜 귀엽게 · 더 심플하게</span>
+    <span class="badge">다크: 카드가 배경에서 확실히 뜨도록 대비 ↑</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- 01 Warm Sand · Light minimal -->
+    <div class="panel" style="
+        --bg:#f4ecdd; --surface:#fffdf9; --text:#2f2820; --muted:#998a76; --line:#e6dac6;
+        --accent:#c2703d; --accent2:#d99a3c; --accent-soft:#f6e7d8; --accent-ink:#b3622f;
+        --thumb-bg:#efe5d2; --font-body:'Manrope'; --font-logo:'Manrope'; --font-title:'Manrope';
+        --logo-weight:800; --logo-color:#b3622f; --logo-spacing:-0.8px;
+        --r-card:16px; --r-thumb:12px; --r-pill:13px; --card-shadow:0 2px 8px rgba(70,45,20,.05);
+        --play-bg:#c2703d; --now-bg:#faf0e4;">
+      <div class="panel-head"><div class="panel-num">01</div><div class="panel-title">웜 샌드 · 라이트</div>
+        <div class="panel-keys">모래빛 크림 + 클레이 테라코타 포인트 · 깔끔한 산세리프 · 차분·따뜻</div></div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+          <div class="apphead"><div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div><div class="addbtn">+</div></div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#f4ecdd,#eccfa9 60%,#c2703d)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#f4ecdd"></div><small>F4ECDD</small></div>
+            <div class="sw"><div class="chip" style="background:#fffdf9"></div><small>FFFDF9</small></div>
+            <div class="sw"><div class="chip" style="background:#c2703d"></div><small>C2703D</small></div>
+            <div class="sw"><div class="chip" style="background:#d99a3c"></div><small>D99A3C</small></div>
+            <div class="sw"><div class="chip" style="background:#2f2820"></div><small>2F2820</small></div>
+          </div>
+          <div class="reflist"><b>느낌</b> — 햇살 든 베이지 거실. 장식 없이 색·여백·온도로만 따뜻함. 가장 무난·실용.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 02 Editorial Warm · Serif light -->
+    <div class="panel" style="
+        --bg:#f7f0e1; --surface:#fffefb; --text:#33291d; --muted:#92836c; --line:#e8ddc7;
+        --accent:#b5613a; --accent2:#c89b3c; --accent-soft:#f1e4d2; --accent-ink:#9d4f2e;
+        --thumb-bg:#efe4cf; --font-body:'Manrope'; --font-logo:'Fraunces'; --font-title:'Fraunces';
+        --logo-weight:600; --logo-color:#8c4a2a; --logo-spacing:-0.2px;
+        --r-card:12px; --r-thumb:9px; --r-pill:9px; --card-shadow:0 2px 7px rgba(70,45,20,.05);
+        --play-bg:#b5613a; --now-bg:#f6ebda;">
+      <div class="panel-head"><div class="panel-num">02</div><div class="panel-title">에디토리얼 웜 · 세리프</div>
+        <div class="panel-keys">크림 + 테라코타 · 우아한 세리프 제목 · 각진 모서리 · 잡지 같은 정제된 따뜻함</div></div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+          <div class="apphead"><div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div><div class="addbtn">+</div></div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#f7f0e1,#e3c19a 60%,#b5613a)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#f7f0e1"></div><small>F7F0E1</small></div>
+            <div class="sw"><div class="chip" style="background:#b5613a"></div><small>B5613A</small></div>
+            <div class="sw"><div class="chip" style="background:#c89b3c"></div><small>C89B3C</small></div>
+            <div class="sw"><div class="chip" style="background:#7a8b6a"></div><small>7A8B6A</small></div>
+            <div class="sw"><div class="chip" style="background:#33291d"></div><small>33291D</small></div>
+          </div>
+          <div class="reflist"><b>느낌</b> — 따뜻하지만 세련됨. 세리프 제목이 무게를 줘서 '귀엽다'보다 '고급스럽다'. 브랜드감 강함.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 03 Ember Dark · high contrast (fixed) -->
+    <div class="panel" style="
+        --bg:#181009; --surface:#322417; --text:#f6ead4; --muted:#bda484; --line:#4a3520;
+        --accent:#edab53; --accent2:#f3c270; --accent-soft:#3c2c18; --accent-ink:#f3c270;
+        --thumb-bg:#43301d; --font-body:'Manrope'; --font-logo:'Manrope'; --font-title:'Manrope';
+        --logo-weight:800; --logo-color:#f3c270; --logo-spacing:-0.8px;
+        --r-card:16px; --r-thumb:12px; --r-pill:13px; --card-shadow:0 6px 18px rgba(0,0,0,.45);
+        --play-bg:#edab53; --play-ink:#2a1908; --now-bg:#3a2a1a; --tab-bg:#120b06;
+        --texture:radial-gradient(circle at 50% -5%, rgba(237,171,83,.14), transparent 55%); --tex-op:1;">
+      <div class="panel-head"><div class="panel-num">03</div><div class="panel-title">엠버 다크 · 대비 강화</div>
+        <div class="panel-keys">난롯불 다크 (개선판) · 짙은 배경 vs 또렷한 카드 · 황금 등불 포인트 · 아늑·몰입</div></div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+          <div class="apphead"><div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div><div class="addbtn">+</div></div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#181009,#5c3c1d 55%,#edab53)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#181009"></div><small>181009</small></div>
+            <div class="sw"><div class="chip" style="background:#322417"></div><small>322417</small></div>
+            <div class="sw"><div class="chip" style="background:#edab53"></div><small>EDAB53</small></div>
+            <div class="sw"><div class="chip" style="background:#c9684a"></div><small>C9684A</small></div>
+            <div class="sw"><div class="chip" style="background:#f6ead4"></div><small>F6EAD4</small></div>
+          </div>
+          <div class="reflist"><b>느낌</b> — 좋아하셨던 야간 무드. <b>배경 #181009 ↔ 카드 #322417</b>로 명도 차를 키우고 그림자·테두리로 카드를 띄움. 가시성 ↑</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 04 Warm Charcoal · Dark modern -->
+    <div class="panel" style="
+        --bg:#1a1815; --surface:#2b2620; --text:#efe7da; --muted:#a89c8a; --line:#3d362d;
+        --accent:#e2a85b; --accent2:#ecbd74; --accent-soft:#332c22; --accent-ink:#ecbd74;
+        --thumb-bg:#37312a; --font-body:'Manrope'; --font-logo:'Manrope'; --font-title:'Manrope';
+        --logo-weight:800; --logo-color:#ecbd74; --logo-spacing:-0.8px;
+        --r-card:14px; --r-thumb:11px; --r-pill:12px; --card-shadow:0 4px 14px rgba(0,0,0,.35);
+        --play-bg:#e2a85b; --play-ink:#241a0c; --now-bg:#2f2a22; --tab-bg:#151310;">
+      <div class="panel-head"><div class="panel-num">04</div><div class="panel-title">웜 차콜 · 다크 모던</div>
+        <div class="panel-keys">중성적 웜 차콜 + 앰버 · 갈색기 덜고 더 모던 · 깔끔한 대비 · 차분</div></div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span>▮▮▮</span></div>
+          <div class="apphead"><div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div><div class="addbtn">+</div></div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#1a1815,#5a4427 55%,#e2a85b)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#1a1815"></div><small>1A1815</small></div>
+            <div class="sw"><div class="chip" style="background:#2b2620"></div><small>2B2620</small></div>
+            <div class="sw"><div class="chip" style="background:#e2a85b"></div><small>E2A85B</small></div>
+            <div class="sw"><div class="chip" style="background:#cf7f53"></div><small>CF7F53</small></div>
+            <div class="sw"><div class="chip" style="background:#efe7da"></div><small>EFE7DA</small></div>
+          </div>
+          <div class="reflist"><b>느낌</b> — 03번보다 갈색기를 빼고 중성적으로. 모던한 다크에 따뜻한 앰버 한 방울. 깔끔·세련.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

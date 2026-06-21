@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>plilog — 디즈니 / 오두막 무드 탐색</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Baloo+2:wght@500;600;700&family=DM+Serif+Display&family=Gaegu:wght@400;700&family=Caveat:wght@500;700&family=Bitter:ital,wght@0,500;0,700;1,500&family=Gowun+Batang:wght@400;700&family=Jua&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { color-scheme: light; }
+  body {
+    font-family: "Nunito", -apple-system, sans-serif;
+    background: #14110e;
+    color: #efe6d6;
+    padding: 48px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .intro {
+    max-width: 1180px; margin: 0 auto 40px; text-align: center;
+  }
+  .intro h1 {
+    font-family: "Fredoka", sans-serif; font-weight: 600;
+    font-size: 34px; letter-spacing: -0.5px; margin-bottom: 10px;
+    color: #f6ecdb;
+  }
+  .intro p { color: #b6a892; font-size: 16px; line-height: 1.6; max-width: 720px; margin: 0 auto; }
+  .intro .pick {
+    display: inline-block; margin-top: 18px; padding: 10px 20px;
+    background: #2a221b; border: 1px solid #3a2f25; border-radius: 999px;
+    color: #e9c987; font-weight: 700; font-size: 14px;
+  }
+  .grid {
+    max-width: 1180px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px;
+  }
+  @media (max-width: 920px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    border-radius: 24px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: #1b1712;
+    display: flex; flex-direction: column;
+  }
+  .panel-head { padding: 22px 24px 6px; }
+  .panel-num {
+    font-family: "Fredoka", sans-serif; font-weight: 700; font-size: 13px;
+    letter-spacing: 1px; color: #8a7c69;
+  }
+  .panel-title { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 23px; margin: 2px 0 4px; color: #f3e9d8; }
+  .panel-keys { font-size: 13.5px; color: #a99b86; line-height: 1.5; }
+  .panel-ref { font-size: 12.5px; color: #7e7164; }
+
+  .stage {
+    padding: 26px 24px 30px; display: flex; gap: 22px; align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  /* ---------- phone ---------- */
+  .phone {
+    width: 264px; flex: 0 0 264px; border-radius: 34px; padding: 9px;
+    background: linear-gradient(160deg,#3a3a3a,#0c0c0c);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.5);
+  }
+  .screen {
+    border-radius: 27px; overflow: hidden; height: 510px;
+    display: flex; flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    position: relative;
+    font-family: var(--font-body);
+  }
+  .screen::before { /* texture overlay */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: var(--texture, none); opacity: var(--tex-op, 0); mix-blend-mode: var(--tex-blend, normal);
+  }
+  .statusbar { display:flex; justify-content: space-between; align-items:center;
+    padding: 12px 18px 4px; font-size: 12px; font-weight: 700; color: var(--text); opacity: .9; }
+  .statusbar .dots { letter-spacing: 2px; }
+
+  .apphead { display:flex; align-items:center; justify-content: space-between; padding: 8px 18px 6px; }
+  .logo { display:flex; align-items:center; gap: 8px; }
+  .wave { display:flex; align-items:flex-end; gap: 2.5px; height: 22px; }
+  .wave span { width: 3px; border-radius: 3px; background: var(--accent); display:block; }
+  .wordmark { font-family: var(--font-logo); font-weight: var(--logo-weight,700); font-size: 21px; color: var(--logo-color, var(--text)); letter-spacing: var(--logo-spacing, -0.5px); }
+  .addbtn { width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft, rgba(0,0,0,.06)); display:flex; align-items:center; justify-content:center; color: var(--accent-ink, var(--accent)); font-size: 22px; font-weight: 700; line-height: 0; }
+
+  .search { margin: 8px 16px 4px; height: 38px; border-radius: var(--r-pill, 14px);
+    background: var(--surface); border: 1px solid var(--line); display:flex; align-items:center;
+    padding: 0 14px; gap: 8px; color: var(--muted); font-size: 13px; }
+  .search .mag { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--muted); position: relative; }
+  .search .mag::after { content:""; position:absolute; width:6px; height:2px; background: var(--muted); transform: rotate(45deg); right:-4px; bottom:-1px; border-radius: 2px; }
+
+  .list { padding: 8px 16px; display:flex; flex-direction: column; gap: 10px; flex: 1; overflow: hidden; }
+  .card { display:flex; align-items:center; gap: 12px; padding: 11px; border-radius: var(--r-card, 16px);
+    background: var(--surface); border: 1px solid var(--line); box-shadow: var(--card-shadow, none); }
+  .thumb { width: 42px; height: 42px; border-radius: var(--r-thumb, 12px); flex:0 0 42px;
+    background: var(--thumb-bg); display:flex; align-items:center; justify-content:center; }
+  .note { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); position: relative; }
+  .note::before { content:""; position:absolute; width: 3px; height: 13px; background: var(--accent); right: 1px; bottom: 7px; border-radius: 2px; }
+  .meta { flex:1; min-width: 0; }
+  .t1 { font-weight: 800; font-size: 14.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-title, var(--font-body)); }
+  .t2 { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .stars { display:flex; align-items:center; gap: 3px; font-size: 11px; color: var(--muted); }
+  .star { color: var(--accent2, var(--accent)); font-size: 12px; }
+
+  .nowbar { margin: 4px 12px 8px; border-radius: var(--r-card,16px); background: var(--now-bg, var(--surface));
+    border: 1px solid var(--line); display:flex; align-items:center; gap: 10px; padding: 9px 12px; }
+  .nowbar .nt { flex:1; min-width:0; }
+  .nowbar .nt .a { font-weight: 800; font-size: 12.5px; color: var(--now-text, var(--text)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .nowbar .nt .b { font-size: 11px; color: var(--now-muted, var(--muted)); }
+  .play { width: 34px; height: 34px; border-radius: 50%; background: var(--play-bg, var(--accent));
+    display:flex; align-items:center; justify-content:center; }
+  .play .tri { width: 0; height: 0; border-left: 11px solid var(--play-ink, #fff); border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 3px; }
+
+  .tabbar { display:flex; border-top: 1px solid var(--line); background: var(--tab-bg, var(--surface)); }
+  .tab { flex:1; text-align:center; padding: 10px 0 14px; font-size: 11px; font-weight: 700; color: var(--muted); }
+  .tab.on { color: var(--accent-ink, var(--accent)); }
+  .tab .ico { font-size: 17px; display:block; margin-bottom: 2px; }
+
+  /* ---------- palette + ref column ---------- */
+  .side { flex: 1; min-width: 200px; padding-top: 4px; }
+  .swatches { display:flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .sw { display:flex; flex-direction: column; gap: 5px; align-items:center; }
+  .chip { width: 46px; height: 46px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+  .sw small { font-size: 10px; color: #9a8c78; font-family: ui-monospace, monospace; }
+  .reflist { font-size: 13px; color: #b8aa94; line-height: 1.7; }
+  .reflist b { color: #e9d9bf; font-weight: 700; }
+  .moodstrip { height: 64px; border-radius: 14px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>plilog — 디즈니 / 따뜻한 오두막 무드 탐색</h1>
+    <p>같은 앱(plilog)을 네 가지 무드로 렌더링했습니다. 색·폰트·모서리·질감이 모두 다릅니다.<br/>실제 앱 화면이 어떤 느낌이 될지 보시고 고르시면 됩니다.</p>
+    <div class="pick">마음에 드는 번호를 알려주세요 — "2번" 또는 "1번 색 + 3번 폰트" 같은 조합도 좋아요</div>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1. 동화책 수채화 -->
+    <div class="panel" style="
+        --bg:#fbf4e6; --surface:#fffdf8; --text:#4a3a2c; --muted:#9c8b76; --line:#ece0cb;
+        --accent:#9b7fc4; --accent2:#e6a23c; --accent-soft:#efe6f6; --accent-ink:#7b5fb0;
+        --thumb-bg:#efe7d6; --font-body:'Gowun Batang', serif; --font-logo:'DM Serif Display', serif;
+        --font-title:'Gowun Batang', serif; --logo-weight:400; --logo-color:#6b54a0; --logo-spacing:0px;
+        --r-card:18px; --r-thumb:14px; --r-pill:16px;
+        --texture:radial-gradient(circle at 20% 10%, rgba(155,127,196,.06), transparent 40%), radial-gradient(circle at 90% 80%, rgba(230,162,60,.07), transparent 45%); --tex-op:1;
+        --play-bg:#9b7fc4; --now-bg:#f4ecfa;">
+      <div class="panel-head">
+        <div class="panel-num">01</div>
+        <div class="panel-title">동화책 수채화</div>
+        <div class="panel-keys">고전 디즈니 그림책 · 손그림 · 부드러운 라일락+허니 · 종이 질감</div>
+      </div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span class="dots">●●● ▮</span></div>
+          <div class="apphead">
+            <div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div>
+            <div class="addbtn">+</div>
+          </div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#fbf4e6,#efe1f2 55%,#f7e7c8)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#fbf4e6"></div><small>FBF4E6</small></div>
+            <div class="sw"><div class="chip" style="background:#9b7fc4"></div><small>9B7FC4</small></div>
+            <div class="sw"><div class="chip" style="background:#e6a23c"></div><small>E6A23C</small></div>
+            <div class="sw"><div class="chip" style="background:#7fa67c"></div><small>7FA67C</small></div>
+            <div class="sw"><div class="chip" style="background:#4a3a2c"></div><small>4A3A2C</small></div>
+          </div>
+          <div class="reflist">
+            <b>이런 느낌</b> — 곰돌이 푸 100에이커 숲, 이상한 나라의 앨리스 수채 배경, 메리 포핀스 그림책 한 장.<br/>
+            손으로 칠한 듯한 부드러운 파스텔, 크림색 종이 위 라일락·허니 포인트.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 픽사 코지 오두막 (주간) -->
+    <div class="panel" style="
+        --bg:#f6e8cf; --surface:#fffaf0; --text:#3e2c1e; --muted:#a08566; --line:#ecd9b9;
+        --accent:#e8915b; --accent2:#e0a52e; --accent-soft:#fbe6d4; --accent-ink:#cf6a3c;
+        --thumb-bg:#f0e0c4; --font-body:'Nunito', sans-serif; --font-logo:'Fredoka', sans-serif;
+        --font-title:'Fredoka', sans-serif; --logo-weight:600; --logo-color:#cf6a3c; --logo-spacing:-0.5px;
+        --r-card:20px; --r-thumb:15px; --r-pill:18px; --card-shadow:0 4px 12px rgba(207,106,60,.08);
+        --play-bg:#e8915b; --now-bg:#fbece0;">
+      <div class="panel-head">
+        <div class="panel-num">02</div>
+        <div class="panel-title">픽사 코지 오두막 · 주간</div>
+        <div class="panel-keys">'업(Up)' 거실 · 통통 둥근 카드 · 크림+노을 코랄 · 밝고 포근</div>
+      </div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span class="dots">●●● ▮</span></div>
+          <div class="apphead">
+            <div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div>
+            <div class="addbtn">+</div>
+          </div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#f6e8cf,#f3c79b 60%,#e8915b)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#f6e8cf"></div><small>F6E8CF</small></div>
+            <div class="sw"><div class="chip" style="background:#e8915b"></div><small>E8915B</small></div>
+            <div class="sw"><div class="chip" style="background:#e0a52e"></div><small>E0A52E</small></div>
+            <div class="sw"><div class="chip" style="background:#c75d4a"></div><small>C75D4A</small></div>
+            <div class="sw"><div class="chip" style="background:#3e2c1e"></div><small>3E2C1E</small></div>
+          </div>
+          <div class="reflist">
+            <b>이런 느낌</b> — '업'의 칼·엘리 거실, '메리다' 오두막 낮 햇살, 라따뚜이 주방의 따뜻한 빛.<br/>
+            둥글둥글 통통한 3D풍 카드, 크림 위에 노을빛 코랄 — 밝고 친근.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 난롯불 야간 -->
+    <div class="panel" style="
+        --bg:#221710; --surface:#2e2018; --text:#f2e3c9; --muted:#b39a7c; --line:#3d2c1f;
+        --accent:#e8a14b; --accent2:#f0b860; --accent-soft:#3a2818; --accent-ink:#f0b860;
+        --thumb-bg:#3a2a1d; --font-body:'Nunito', sans-serif; --font-logo:'Fredoka', sans-serif;
+        --font-title:'Fredoka', sans-serif; --logo-weight:600; --logo-color:#f0b860; --logo-spacing:-0.5px;
+        --r-card:20px; --r-thumb:15px; --r-pill:18px; --card-shadow:0 6px 16px rgba(0,0,0,.3);
+        --play-bg:#e8a14b; --play-ink:#2a1c10; --now-bg:#34241a; --tab-bg:#1c130d;
+        --texture:radial-gradient(circle at 50% 0%, rgba(232,161,75,.16), transparent 55%); --tex-op:1;">
+      <div class="panel-head">
+        <div class="panel-num">03</div>
+        <div class="panel-title">난롯불 오두막 · 야간</div>
+        <div class="panel-keys">밤의 통나무집 · 따뜻한 다크 · 초콜릿 베이스 + 황금 등불 · 아늑·몰입</div>
+      </div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span class="dots">●●● ▮</span></div>
+          <div class="apphead">
+            <div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div>
+            <div class="addbtn">+</div>
+          </div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#221710,#5b3a1f 60%,#e8a14b)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#221710"></div><small>221710</small></div>
+            <div class="sw"><div class="chip" style="background:#2e2018"></div><small>2E2018</small></div>
+            <div class="sw"><div class="chip" style="background:#e8a14b"></div><small>E8A14B</small></div>
+            <div class="sw"><div class="chip" style="background:#c75d4a"></div><small>C75D4A</small></div>
+            <div class="sw"><div class="chip" style="background:#f2e3c9"></div><small>F2E3C9</small></div>
+          </div>
+          <div class="reflist">
+            <b>이런 느낌</b> — '메리다' 밤의 성, 곰돌이 푸 굴 속 촛불, 겨울왕국 오큰의 사우나 오두막.<br/>
+            어둡지만 차갑지 않은 따뜻한 다크. 황금 등불빛이 카드를 비추는 몰입감.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 테마파크 산장 -->
+    <div class="panel" style="
+        --bg:#efe2c9; --surface:#fdf6e7; --text:#3a2a1a; --muted:#8f7558; --line:#dcc7a2;
+        --accent:#b5852f; --accent2:#9a6a2b; --accent-soft:#f0e3c6; --accent-ink:#8a6322;
+        --thumb-bg:#e6d4af; --font-body:'Bitter', serif; --font-logo:'Bitter', serif;
+        --font-title:'Bitter', serif; --logo-weight:700; --logo-color:#7a4f24; --logo-spacing:-0.3px;
+        --r-card:10px; --r-thumb:8px; --r-pill:8px; --card-shadow:0 2px 6px rgba(122,79,36,.1);
+        --play-bg:#b5852f; --now-bg:#f3e8cf;">
+      <div class="panel-head">
+        <div class="panel-num">04</div>
+        <div class="panel-title">테마파크 산장 (로지)</div>
+        <div class="panel-keys">디즈니 Wilderness Lodge · 통나무·황동·가죽 · 빈티지 세리프 · 각진 모서리</div>
+      </div>
+      <div class="stage">
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>9:41</span><span class="dots">●●● ▮</span></div>
+          <div class="apphead">
+            <div class="logo"><div class="wave"><span style="height:8px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:13px"></span><span style="height:18px"></span><span style="height:7px"></span></div><div class="wordmark">plilog</div></div>
+            <div class="addbtn">+</div>
+          </div>
+          <div class="search"><span class="mag"></span>제목으로 검색</div>
+          <div class="list">
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>5</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="stars"><span class="star">★</span>4</div></div>
+            <div class="card"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="stars"><span class="star">★</span>3</div></div>
+          </div>
+          <div class="nowbar"><div class="thumb" style="width:34px;height:34px;flex:0 0 34px"><div class="note"></div></div><div class="nt"><div class="a">밤편지</div><div class="b">방금 녹음한 버전</div></div><div class="play"><span class="tri"></span></div></div>
+          <div class="tabbar"><div class="tab on"><span class="ico">♪</span>노래</div><div class="tab"><span class="ico">▤</span>플레이리스트</div></div>
+        </div></div>
+        <div class="side">
+          <div class="moodstrip" style="background:linear-gradient(120deg,#2e2018,#8a6322 55%,#efe2c9)"></div>
+          <div class="swatches">
+            <div class="sw"><div class="chip" style="background:#2e2018"></div><small>2E2018</small></div>
+            <div class="sw"><div class="chip" style="background:#b5852f"></div><small>B5852F</small></div>
+            <div class="sw"><div class="chip" style="background:#efe2c9"></div><small>EFE2C9</small></div>
+            <div class="sw"><div class="chip" style="background:#6b4a2a"></div><small>6B4A2A</small></div>
+            <div class="sw"><div class="chip" style="background:#3a2a1a"></div><small>3A2A1A</small></div>
+          </div>
+          <div class="reflist">
+            <b>이런 느낌</b> — 디즈니 윌더니스 로지 로비, 통나무 기둥과 황동 랜턴, 가죽 의자.<br/>
+            빈티지 세리프 + 각진 모서리. 가장 클래식하고 '진짜 산장' 같은 무게감.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
