@@ -286,7 +286,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
             activeOpacity={0.8}
           >
             <View style={styles.recordButtonInner}>
-              <Ionicons name="mic" size={24} color={colors.text} />
+              <Ionicons name="mic" size={24} color={colors.onAccent} />
             </View>
           </TouchableOpacity>
         </View>
@@ -492,7 +492,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.record,
     justifyContent: 'center',
     alignItems: 'center',
   },

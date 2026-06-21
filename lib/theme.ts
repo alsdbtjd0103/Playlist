@@ -15,6 +15,7 @@ export const lightColors = {
   onAccent: '#ffffff',
   success: '#52684d',
   danger: '#b3402e',
+  record: '#b85a3e',
   overlay: 'rgba(20,15,10,0.45)',
 } as const;
 
@@ -32,6 +33,7 @@ export const darkColors = {
   onAccent: '#241a0c',
   success: '#8fae84',
   danger: '#e6705f',
+  record: '#e07a5f',
   overlay: 'rgba(0,0,0,0.6)',
 } as const;
 

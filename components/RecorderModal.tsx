@@ -141,7 +141,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                   {checkingPermission ? (
                     <ActivityIndicator color={colors.text} size="large" />
                   ) : (
-                    <Ionicons name="mic" size={48} color="#fff" />
+                    <Ionicons name="mic" size={48} color={colors.onAccent} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -183,7 +183,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                     onPress={stopRecording}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="stop" size={28} color={colors.text} />
+                    <Ionicons name="stop" size={28} color={colors.onAccent} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -317,7 +317,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.record,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -334,11 +334,11 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.record,
   },
   recordingText: {
     ...typography.h3,
-    color: colors.danger,
+    color: colors.record,
   },
   pausedText: {
     ...typography.h3,
@@ -373,7 +373,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.record,
     justifyContent: 'center',
     alignItems: 'center',
   },
