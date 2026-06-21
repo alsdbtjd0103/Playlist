@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, StyleSheet, PanResponder, LayoutChangeEvent } from 'react-native';
 import { TrimRange, clampTrimRange } from '../lib/trim';
 import { colors, borderRadius } from '../lib/theme';
@@ -19,20 +19,38 @@ export function WaveformView({ samples, duration, range, playhead, onChangeRange
   const widthRef = useRef(width);
   const onLayout = (e: LayoutChangeEvent) => { widthRef.current = e.nativeEvent.layout.width; };
 
-  const secToX = (sec: number) => (duration > 0 ? (sec / duration) * widthRef.current : 0);
-  const xToSec = (x: number) => (widthRef.current > 0 ? (x / widthRef.current) * duration : 0);
+  const rangeRef = useRef(range);
+  const durationRef = useRef(duration);
+  const onChangeRef = useRef(onChangeRange);
+  useEffect(() => {
+    rangeRef.current = range;
+    durationRef.current = duration;
+    onChangeRef.current = onChangeRange;
+  });
 
-  const makeResponder = (which: 'start' | 'end') =>
-    PanResponder.create({
+  const secToX = (sec: number) => (duration > 0 ? (sec / duration) * widthRef.current : 0);
+
+  const makeResponder = (which: 'start' | 'end') => {
+    let startSecAtGrant = 0;
+    return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        startSecAtGrant = which === 'start' ? rangeRef.current.start : rangeRef.current.end;
+      },
       onPanResponderMove: (_evt, gesture) => {
-        const x = which === 'start' ? secToX(range.start) + gesture.dx : secToX(range.end) + gesture.dx;
-        const sec = xToSec(Math.max(0, Math.min(widthRef.current, x)));
-        const next = which === 'start' ? { ...range, start: sec } : { ...range, end: sec };
-        onChangeRange(clampTrimRange(next, duration));
+        const w = widthRef.current;
+        const dur = durationRef.current;
+        const startX = dur > 0 ? (startSecAtGrant / dur) * w : 0;
+        const x = Math.max(0, Math.min(w, startX + gesture.dx));
+        const sec = w > 0 ? (x / w) * dur : 0;
+        const next = which === 'start'
+          ? { ...rangeRef.current, start: sec }
+          : { ...rangeRef.current, end: sec };
+        onChangeRef.current(clampTrimRange(next, dur));
       },
     });
+  };
 
   const startResponder = useRef(makeResponder('start')).current;
   const endResponder = useRef(makeResponder('end')).current;
