@@ -10,6 +10,11 @@ import {
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
+// 녹음 진행 상태. recorderState.isRecording 은 500ms 폴링으로만 갱신되어
+// pause()/record() 직후 최대 500ms 동안 stale 하므로, UI 분기는 폴링값이 아니라
+// 핸들러가 동기적으로 갱신하는 이 명시적 상태 머신을 단일 기준으로 삼는다.
+type RecordingPhase = 'idle' | 'recording' | 'paused' | 'stopped';
+
 export interface UseRecordingReturn {
   // 상태
   isRecording: boolean;
@@ -33,7 +38,7 @@ export function useRecording(): UseRecordingReturn {
   const recorderState = useAudioRecorderState(audioRecorder);
 
   const [audioUri, setAudioUri] = useState<string | null>(null);
-  const [isPaused, setIsPaused] = useState(false);
+  const [phase, setPhase] = useState<RecordingPhase>('idle');
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined');
   const [checkingPermission, setCheckingPermission] = useState(false);
 
@@ -51,15 +56,6 @@ export function useRecording(): UseRecordingReturn {
       }
     })();
   }, []);
-
-  // record() 호출 후 isRecording이 true가 되기 전 isPaused를 false로 만들면
-  // 두 플래그 모두 false인 윈도우에 RecorderModal이 "시작 버튼"으로 깜빡임.
-  // recorder가 실제로 녹음 중이 된 후 isPaused 해제하여 race condition 제거.
-  useEffect(() => {
-    if (recorderState.isRecording && isPaused) {
-      setIsPaused(false);
-    }
-  }, [recorderState.isRecording, isPaused]);
 
   const checkPermissions = async () => {
     setCheckingPermission(true);
@@ -85,7 +81,7 @@ export function useRecording(): UseRecordingReturn {
       audioRecorder.record();
       setPermissionStatus('granted');
       setAudioUri(null);
-      setIsPaused(false);
+      setPhase('recording');
       setCheckingPermission(false);
     } catch (error: any) {
       console.error('녹음 시작 실패:', error);
@@ -110,7 +106,7 @@ export function useRecording(): UseRecordingReturn {
   const pauseRecording = () => {
     try {
       audioRecorder.pause();
-      setIsPaused(true);
+      setPhase('paused');
     } catch (error) {
       console.error('녹음 일시정지 실패:', error);
     }
@@ -119,6 +115,7 @@ export function useRecording(): UseRecordingReturn {
   const resumeRecording = () => {
     try {
       audioRecorder.record();
+      setPhase('recording');
     } catch (error) {
       console.error('녹음 재개 실패:', error);
     }
@@ -127,7 +124,7 @@ export function useRecording(): UseRecordingReturn {
   const stopRecording = async () => {
     try {
       await audioRecorder.stop();
-      setIsPaused(false);
+      setPhase('stopped');
       const uri = audioRecorder.uri;
 
       if (uri && uri.length > 0) {
@@ -142,16 +139,16 @@ export function useRecording(): UseRecordingReturn {
   };
 
   const resetRecording = () => {
-    if (recorderState.isRecording || isPaused) {
+    if (phase === 'recording' || phase === 'paused') {
       audioRecorder.stop();
     }
-    setIsPaused(false);
+    setPhase('idle');
     setAudioUri(null);
   };
 
   return {
-    isRecording: recorderState.isRecording,
-    isPaused,
+    isRecording: phase === 'recording',
+    isPaused: phase === 'paused',
     recordingTime: Math.round(recorderState.durationMillis / 1000),
     audioUri,
     permissionStatus,
