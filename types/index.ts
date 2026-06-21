@@ -21,6 +21,9 @@ export interface Version {
   duration?: number;
   recordedAt: Date;
   memo?: string;
+  waveform?: number[];
+  trim?: { start: number; end: number };
+  editedFrom?: string;
 }
 
 // 플레이리스트
