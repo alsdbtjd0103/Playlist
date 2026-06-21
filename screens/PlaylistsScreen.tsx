@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,12 +24,15 @@ import {
   getAllDefaultVersions,
   addToPlaylist,
 } from '../lib/database';
-import { colors, spacing, borderRadius, typography } from '../lib/theme';
+import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
+import { useTheme } from '../contexts/ThemeContext';
 import ScreenHeader from '../components/ScreenHeader';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Playlists'>;
 
 export default function PlaylistsScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [playlists, setPlaylists] = useState<Playlist[] | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [name, setName] = useState('');
@@ -122,7 +125,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
         <Ionicons
           name={item.isDefault ? 'musical-notes' : 'list'}
           size={24}
-          color={colors.textSecondary}
+          color={colors.textMuted}
         />
       </View>
       <View style={styles.playlistInfo}>
@@ -130,20 +133,20 @@ export default function PlaylistsScreen({ navigation }: Props) {
           <Text style={styles.playlistName} numberOfLines={1}>{item.name}</Text>
           {item.isDefault && (
             <View style={styles.defaultBadge}>
-              <Ionicons name="checkmark-circle" size={12} color={colors.primary} />
+              <Ionicons name="checkmark-circle" size={12} color={colors.accentStrong} />
               <Text style={styles.defaultBadgeText}>기본</Text>
             </View>
           )}
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.textTertiary} />
+      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
     </TouchableOpacity>
   );
 
   if (playlists === null) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accentStrong} />
       </View>
     );
   }
@@ -155,7 +158,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
       {playlists.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconContainer}>
-            <Ionicons name="albums-outline" size={64} color={colors.textTertiary} />
+            <Ionicons name="albums-outline" size={64} color={colors.textMuted} />
           </View>
           <Text style={styles.emptyTitle}>플레이리스트가 없습니다</Text>
           <Text style={styles.emptySubtitle}>
@@ -170,7 +173,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
                 style={styles.sortButton}
                 onPress={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
               >
-                <Ionicons name="swap-vertical" size={16} color={colors.textPrimary} />
+                <Ionicons name="swap-vertical" size={16} color={colors.text} />
                 <Text style={styles.sortButtonText}>
                   {sortOrder === 'newest' ? '최신순' : '오래된순'}
                 </Text>
@@ -206,18 +209,18 @@ export default function PlaylistsScreen({ navigation }: Props) {
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}
               >
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>이름</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="albums" size={20} color={colors.textTertiary} style={styles.inputIcon} />
+                <Ionicons name="albums" size={20} color={colors.textMuted} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="예: 내가 좋아하는 노래"
-                  placeholderTextColor={colors.textTertiary}
+                  placeholderTextColor={colors.textMuted}
                   value={name}
                   onChangeText={setName}
                   editable={!creating}
@@ -239,10 +242,10 @@ export default function PlaylistsScreen({ navigation }: Props) {
                 disabled={creating || !name.trim()}
               >
                 {creating ? (
-                  <ActivityIndicator color={colors.background} size="small" />
+                  <ActivityIndicator color={colors.bg} size="small" />
                 ) : (
                   <>
-                    <Ionicons name="add-circle" size={20} color={colors.background} />
+                    <Ionicons name="add-circle" size={20} color={colors.bg} />
                     <Text style={styles.confirmButtonText}>생성</Text>
                   </>
                 )}
@@ -255,21 +258,21 @@ export default function PlaylistsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   loadingText: {
     marginTop: spacing.md,
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   list: {
     flex: 1,
@@ -297,7 +300,7 @@ const styles = StyleSheet.create({
   },
   sortButtonText: {
     fontSize: 12,
-    color: colors.textPrimary,
+    color: colors.text,
     fontWeight: '500',
   },
   playlistCard: {
@@ -312,7 +315,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -327,20 +330,20 @@ const styles = StyleSheet.create({
   playlistName: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   defaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
   defaultBadgeText: {
     ...typography.caption,
-    color: colors.textPrimary,
+    color: colors.text,
     fontWeight: '600',
   },
   emptyContainer: {
@@ -360,12 +363,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...typography.h3,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
     ...typography.bodySmall,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -388,13 +391,13 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...typography.h3,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -404,13 +407,13 @@ const styles = StyleSheet.create({
   inputLabel: {
     ...typography.bodySmall,
     fontWeight: '500',
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -422,7 +425,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     ...typography.body,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -439,20 +442,20 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   cancelButton: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
   },
   cancelButtonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   confirmButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
   },
   confirmButtonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.background,
+    color: colors.bg,
   },
   disabledButton: {
     opacity: 0.5,
