@@ -18,7 +18,7 @@ import { colors, spacing, borderRadius, typography } from '../lib/theme';
 interface RecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (audioUri: string, rating: number, memo?: string, waveform?: number[]) => Promise<void>;
+  onSave: (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number) => Promise<void>;
 }
 
 export default function RecorderModal({ visible, onClose, onSave }: RecorderModalProps) {
@@ -63,7 +63,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
 
     setSaving(true);
     try {
-      await onSave(audioUri, rating, memo.trim() || undefined, waveform);
+      await onSave(audioUri, rating, memo.trim() || undefined, waveform, recordingTime);
       handleClose();
     } catch (error) {
       console.error('저장 실패:', error);

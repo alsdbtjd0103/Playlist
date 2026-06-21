@@ -42,6 +42,12 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
     })();
   }, [versionId]);
 
+  useEffect(() => {
+    if (version && !version.trim && range.end === 0 && status.duration > 0) {
+      setRange({ start: 0, end: status.duration });
+    }
+  }, [version, status.duration, range.end]);
+
   const duration = version?.duration ?? status.duration ?? 0;
 
   // 구간 끝 도달 시 미리듣기 정지

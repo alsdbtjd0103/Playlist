@@ -155,7 +155,11 @@ export function useRecording(): UseRecordingReturn {
 
   const resetRecording = () => {
     if (phase === 'recording' || phase === 'paused') {
-      audioRecorder.stop();
+      try {
+        audioRecorder.stop();
+      } catch (error) {
+        console.error('resetRecording: stop 실패', error);
+      }
     }
     setPhase('idle');
     setAudioUri(null);
