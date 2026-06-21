@@ -52,6 +52,15 @@ export function useRecording(): UseRecordingReturn {
     })();
   }, []);
 
+  // record() 호출 후 isRecording이 true가 되기 전 isPaused를 false로 만들면
+  // 두 플래그 모두 false인 윈도우에 RecorderModal이 "시작 버튼"으로 깜빡임.
+  // recorder가 실제로 녹음 중이 된 후 isPaused 해제하여 race condition 제거.
+  useEffect(() => {
+    if (recorderState.isRecording && isPaused) {
+      setIsPaused(false);
+    }
+  }, [recorderState.isRecording, isPaused]);
+
   const checkPermissions = async () => {
     setCheckingPermission(true);
     try {
@@ -110,7 +119,6 @@ export function useRecording(): UseRecordingReturn {
   const resumeRecording = () => {
     try {
       audioRecorder.record();
-      setIsPaused(false);
     } catch (error) {
       console.error('녹음 재개 실패:', error);
     }
