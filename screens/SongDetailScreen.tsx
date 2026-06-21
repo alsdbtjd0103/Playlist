@@ -101,7 +101,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   const { songId } = route.params;
   const [song, setSong] = useState<SongWithVersions | null>(null);
   const [recorderVisible, setRecorderVisible] = useState(false);
-  const { setCurrentTrack, expandPlayer } = usePlayer();
+  const { setPlaylist } = usePlayer();
   const [menuState, setMenuState] = useState<{
     visible: boolean;
     x: number;
@@ -118,9 +118,10 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   const [newRating, setNewRating] = useState(0);
 
   const handlePlayVersion = (version: Version) => {
-    if (!song) return;
-    setCurrentTrack({ song, version });
-    expandPlayer();
+    if (!song || !song.versions || song.versions.length === 0) return;
+    const items = song.versions.map((v) => ({ song, version: v }));
+    const startIndex = items.findIndex((it) => it.version.id === version.id);
+    setPlaylist(items, startIndex >= 0 ? startIndex : 0);
   };
 
   const fetchSong = async () => {
