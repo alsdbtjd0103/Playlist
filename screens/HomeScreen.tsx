@@ -6,24 +6,21 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
-  TextInput,
   Alert,
-  Platform,
-  ActionSheetIOS,
-  GestureResponderEvent,
   TouchableWithoutFeedback,
-  KeyboardAvoidingView,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList, SongWithVersions } from "../types";
-import { getAllSongs, addSong, getVersionsBySong, deleteSong } from "../lib/database";
+import { getAllSongs, getVersionsBySong, deleteSong } from "../lib/database";
 import { matchesSearch } from "../lib/search";
 import { useFocusEffect } from "@react-navigation/native";
 import { colors, spacing, borderRadius, typography } from "../lib/theme";
 import ScreenHeader from "../components/ScreenHeader";
+import { SongSearchModal } from '../components/SongSearchModal';
+import { AlbumArt } from '../components/AlbumArt';
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -47,9 +44,7 @@ const SongItem = ({
 
   return (
     <TouchableOpacity style={styles.songCard} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.songThumbnail}>
-        <Ionicons name="musical-notes" size={24} color={colors.textSecondary} />
-      </View>
+      <AlbumArt uri={item.artworkUrl} size={48} iconSize={24} />
       <View style={styles.songCardContent}>
         <View style={styles.songInfo}>
           <Text style={styles.songTitle} numberOfLines={1}>
@@ -82,10 +77,7 @@ const SongItem = ({
 export default function HomeScreen({ navigation }: Props) {
   const [songs, setSongs] = useState<SongWithVersions[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [modalVisible, setModalVisible] = useState(false);
-  const [title, setTitle] = useState("");
-  const [artist, setArtist] = useState("");
-  const [adding, setAdding] = useState(false);
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [menuState, setMenuState] = useState<{
     visible: boolean;
     x: number;
@@ -130,27 +122,6 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
-  const handleAddSong = async () => {
-    if (!title.trim()) {
-      Alert.alert("알림", "곡 제목을 입력하세요.");
-      return;
-    }
-
-    setAdding(true);
-    try {
-      await addSong(title.trim(), artist.trim() || undefined);
-      setTitle("");
-      setArtist("");
-      setModalVisible(false);
-      await fetchSongs();
-    } catch (error) {
-      console.error("곡 추가 실패:", error);
-      Alert.alert("오류", "곡 추가에 실패했습니다.");
-    } finally {
-      setAdding(false);
-    }
-  };
-
   const handleDeleteSong = (song: SongWithVersions) => {
     closeMenu();
     Alert.alert(
@@ -189,7 +160,10 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   const filteredSongs = songs
-    ? songs.filter((song) => matchesSearch(song.title, searchQuery))
+    ? songs.filter((song) =>
+        matchesSearch(song.title, searchQuery) ||
+        (song.artist ? matchesSearch(song.artist, searchQuery) : false)
+      )
     : [];
 
   const renderSongCard = ({ item }: { item: SongWithVersions }) => {
@@ -212,7 +186,7 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScreenHeader onAddPress={() => setModalVisible(true)} />
+      <ScreenHeader onAddPress={() => setSearchModalVisible(true)} />
 
       {/* 검색 바 */}
       {songs.length > 0 && (
@@ -243,7 +217,7 @@ export default function HomeScreen({ navigation }: Props) {
           <Text style={styles.emptySubtitle}>첫 번째 곡을 추가해보세요!</Text>
           <TouchableOpacity
             style={styles.emptyAddButton}
-            onPress={() => setModalVisible(true)}
+            onPress={() => setSearchModalVisible(true)}
           >
             <Ionicons name="add" size={24} color={colors.background} />
           </TouchableOpacity>
@@ -289,78 +263,14 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableWithoutFeedback>
       )}
 
-      {/* 곡 추가 모달 */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>새 곡</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>곡 제목</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="musical-note" size={20} color={colors.textTertiary} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="예: 좋은날"
-                  placeholderTextColor={colors.textTertiary}
-                  value={title}
-                  onChangeText={setTitle}
-                  editable={!adding}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>아티스트 (선택)</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="person" size={20} color={colors.textTertiary} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="예: 아이유"
-                  placeholderTextColor={colors.textTertiary}
-                  value={artist}
-                  onChangeText={setArtist}
-                  editable={!adding}
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-                disabled={adding}
-              >
-                <Text style={styles.cancelButtonText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton, !title.trim() && styles.disabledButton]}
-                onPress={handleAddSong}
-                disabled={adding || !title.trim()}
-              >
-                {adding ? (
-                  <ActivityIndicator color={colors.background} size="small" />
-                ) : (
-                  <Text style={styles.confirmButtonText}>추가</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <SongSearchModal
+        visible={searchModalVisible}
+        onClose={() => setSearchModalVisible(false)}
+        onNavigateToSong={(id) => {
+          setSearchModalVisible(false);
+          navigation.navigate('SongDetail', { songId: id });
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -393,14 +303,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     gap: spacing.md,
-  },
-  songThumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
-    justifyContent: "center",
-    alignItems: "center",
   },
   songCardContent: {
     flex: 1,
@@ -462,83 +364,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    padding: spacing.xl,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  modalTitle: {
-    ...typography.h3,
-    color: colors.textPrimary,
-  },
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
-  inputLabel: {
-    ...typography.bodySmall,
-    fontWeight: "500",
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surfaceLight,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  inputIcon: {
-    marginLeft: spacing.md,
-  },
-  input: {
-    flex: 1,
-    padding: spacing.md,
-    fontSize: typography.body.fontSize,
-    color: colors.textPrimary,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: colors.surfaceLight,
-  },
-  cancelButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.body.fontSize,
-    fontWeight: "600",
-  },
-  confirmButton: {
-    backgroundColor: colors.primary,
-  },
-  confirmButtonText: {
-    color: colors.background,
-    fontSize: typography.body.fontSize,
-    fontWeight: "600",
-  },
-  disabledButton: {
-    opacity: 0.5,
   },
   searchContainer: {
     flexDirection: "row",
