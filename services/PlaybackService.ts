@@ -21,6 +21,10 @@ export async function PlaybackService() {
     TrackPlayer.skipToPrevious();
   });
 
+  TrackPlayer.addEventListener(Event.RemoteJumpBackward, () => {
+    TrackPlayer.skipToPrevious();
+  });
+
   TrackPlayer.addEventListener(Event.RemoteStop, () => {
     TrackPlayer.stop();
   });
