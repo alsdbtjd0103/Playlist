@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -22,8 +22,10 @@ import { RootStackParamList, SongWithVersions } from "../types";
 import { getAllSongs, addSong, getVersionsBySong, deleteSong } from "../lib/database";
 import { matchesSearch } from "../lib/search";
 import { useFocusEffect } from "@react-navigation/native";
-import { colors, spacing, borderRadius, typography } from "../lib/theme";
+import { ColorTokens, spacing, borderRadius, typography } from "../lib/theme";
+import { useTheme } from "../contexts/ThemeContext";
 import ScreenHeader from "../components/ScreenHeader";
+import Waveform from "../components/Waveform";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -37,6 +39,8 @@ const SongItem = ({
   onPress: () => void;
 }) => {
   const buttonRef = React.useRef<View>(null);
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const displayVersion = item.defaultVersion || item.latestVersion;
 
   const handlePress = () => {
@@ -48,7 +52,7 @@ const SongItem = ({
   return (
     <TouchableOpacity style={styles.songCard} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.songThumbnail}>
-        <Ionicons name="musical-notes" size={24} color={colors.textSecondary} />
+        <Ionicons name="musical-notes" size={24} color={colors.textMuted} />
       </View>
       <View style={styles.songCardContent}>
         <View style={styles.songInfo}>
@@ -63,7 +67,7 @@ const SongItem = ({
         </View>
         {displayVersion && (
           <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={12} color={colors.warning} />
+            <Ionicons name="star" size={12} color={colors.star} />
             <Text style={styles.ratingText}>{displayVersion.rating}</Text>
           </View>
         )}
@@ -73,13 +77,15 @@ const SongItem = ({
         style={styles.moreButton}
         onPress={handlePress}
       >
-        <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
+        <Ionicons name="ellipsis-vertical" size={20} color={colors.textMuted} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
 };
 
 export default function HomeScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [songs, setSongs] = useState<SongWithVersions[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -205,7 +211,7 @@ export default function HomeScreen({ navigation }: Props) {
   if (songs === null) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accentStrong} />
       </View>
     );
   }
@@ -217,18 +223,18 @@ export default function HomeScreen({ navigation }: Props) {
       {/* 검색 바 */}
       {songs.length > 0 && (
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} color={colors.textTertiary} style={styles.searchIcon} />
+          <Ionicons name="search" size={18} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="제목으로 검색"
-            placeholderTextColor={colors.textTertiary}
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -237,15 +243,15 @@ export default function HomeScreen({ navigation }: Props) {
       {songs.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconContainer}>
-            <Ionicons name="musical-notes-outline" size={64} color={colors.textTertiary} />
+            <Waveform size={40} />
           </View>
-          <Text style={styles.emptyTitle}>아직 등록된 곡이 없습니다</Text>
-          <Text style={styles.emptySubtitle}>첫 번째 곡을 추가해보세요!</Text>
+          <Text style={styles.emptyTitle}>아직 녹음한 곡이 없어요</Text>
+          <Text style={styles.emptySubtitle}>첫 곡을 추가하고 오늘의 목소리를 기록해볼까요?</Text>
           <TouchableOpacity
             style={styles.emptyAddButton}
             onPress={() => setModalVisible(true)}
           >
-            <Ionicons name="add" size={24} color={colors.background} />
+            <Ionicons name="add" size={24} color={colors.bg} />
           </TouchableOpacity>
         </View>
       ) : (
@@ -281,7 +287,7 @@ export default function HomeScreen({ navigation }: Props) {
                 style={styles.menuItem}
                 onPress={() => menuState.song && handleDeleteSong(menuState.song)}
               >
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 <Text style={styles.menuItemText}>삭제</Text>
               </TouchableOpacity>
             </View>
@@ -304,18 +310,18 @@ export default function HomeScreen({ navigation }: Props) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>새 곡</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>곡 제목</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="musical-note" size={20} color={colors.textTertiary} style={styles.inputIcon} />
+                <Ionicons name="musical-note" size={20} color={colors.textMuted} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="예: 좋은날"
-                  placeholderTextColor={colors.textTertiary}
+                  placeholderTextColor={colors.textMuted}
                   value={title}
                   onChangeText={setTitle}
                   editable={!adding}
@@ -326,11 +332,11 @@ export default function HomeScreen({ navigation }: Props) {
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>아티스트 (선택)</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="person" size={20} color={colors.textTertiary} style={styles.inputIcon} />
+                <Ionicons name="person" size={20} color={colors.textMuted} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="예: 아이유"
-                  placeholderTextColor={colors.textTertiary}
+                  placeholderTextColor={colors.textMuted}
                   value={artist}
                   onChangeText={setArtist}
                   editable={!adding}
@@ -352,7 +358,7 @@ export default function HomeScreen({ navigation }: Props) {
                 disabled={adding || !title.trim()}
               >
                 {adding ? (
-                  <ActivityIndicator color={colors.background} size="small" />
+                  <ActivityIndicator color={colors.bg} size="small" />
                 ) : (
                   <Text style={styles.confirmButtonText}>추가</Text>
                 )}
@@ -365,21 +371,21 @@ export default function HomeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   loadingText: {
     marginTop: spacing.md,
     fontSize: typography.body.fontSize,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   listContainer: {
     padding: spacing.lg,
@@ -398,7 +404,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -412,11 +418,11 @@ const styles = StyleSheet.create({
   songTitle: {
     ...typography.body,
     fontWeight: "600",
-    color: colors.textPrimary,
+    color: colors.text,
   },
   songArtist: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   ratingContainer: {
     flexDirection: "row",
@@ -425,7 +431,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   moreButton: {
     padding: spacing.sm,
@@ -447,12 +453,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...typography.h3,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
     ...typography.bodySmall,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     marginBottom: spacing.xl,
   },
   emptyAddButton: {
@@ -460,7 +466,7 @@ const styles = StyleSheet.create({
     height: 56,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
     borderRadius: borderRadius.full,
   },
   modalOverlay: {
@@ -482,7 +488,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...typography.h3,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   inputContainer: {
     marginBottom: spacing.lg,
@@ -490,13 +496,13 @@ const styles = StyleSheet.create({
   inputLabel: {
     ...typography.bodySmall,
     fontWeight: "500",
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -508,7 +514,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     fontSize: typography.body.fontSize,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   modalButtons: {
     flexDirection: "row",
@@ -522,18 +528,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
   },
   cancelButtonText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: typography.body.fontSize,
     fontWeight: "600",
   },
   confirmButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
   },
   confirmButtonText: {
-    color: colors.background,
+    color: colors.bg,
     fontSize: typography.body.fontSize,
     fontWeight: "600",
   },
@@ -559,7 +565,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: typography.body.fontSize,
-    color: colors.textPrimary,
+    color: colors.text,
     padding: 0,
   },
   searchEmptyContainer: {
@@ -568,7 +574,7 @@ const styles = StyleSheet.create({
   },
   searchEmptyText: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   menuOverlay: {
     flex: 1,
@@ -599,7 +605,7 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     ...typography.bodySmall,
-    color: colors.error,
+    color: colors.danger,
     fontWeight: "500",
   },
 });
