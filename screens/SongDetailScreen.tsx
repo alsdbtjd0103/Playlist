@@ -225,10 +225,10 @@ export default function SongDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string) => {
+  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string, waveform?: number[]) => {
     try {
       const { fileName, localUri } = await saveAudioLocally(songId, audioUri);
-      await addVersion(songId, fileName, localUri, rating, undefined, memo);
+      await addVersion(songId, fileName, localUri, rating, undefined, memo, { waveform });
       await fetchSong();
     } catch (error) {
       console.error('녹음 저장 실패:', error);

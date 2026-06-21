@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Alert, Linking } from 'react-native';
 import {
   useAudioRecorder,
@@ -7,6 +7,7 @@ import {
   AudioModule,
   setAudioModeAsync,
 } from 'expo-audio';
+import { normalizeWaveform } from '../lib/waveform';
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -23,6 +24,7 @@ export interface UseRecordingReturn {
   audioUri: string | null;
   permissionStatus: PermissionStatus;
   checkingPermission: boolean;
+  waveform: number[];
 
   // 액션
   startRecording: () => Promise<void>;
@@ -34,13 +36,16 @@ export interface UseRecordingReturn {
 }
 
 export function useRecording(): UseRecordingReturn {
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(audioRecorder);
+  const audioRecorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  const recorderState = useAudioRecorderState(audioRecorder, 100);
 
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [phase, setPhase] = useState<RecordingPhase>('idle');
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined');
   const [checkingPermission, setCheckingPermission] = useState(false);
+
+  const meteringSamplesRef = useRef<number[]>([]);
+  const [waveform, setWaveform] = useState<number[]>([]);
 
   // 오디오 모드 설정 및 권한 초기화
   useEffect(() => {
@@ -56,6 +61,13 @@ export function useRecording(): UseRecordingReturn {
       }
     })();
   }, []);
+
+  // 녹음 중 미터링 샘플 수집
+  useEffect(() => {
+    if (phase === 'recording' && typeof recorderState.metering === 'number') {
+      meteringSamplesRef.current.push(recorderState.metering);
+    }
+  }, [recorderState.metering, phase]);
 
   const checkPermissions = async () => {
     setCheckingPermission(true);
@@ -77,6 +89,8 @@ export function useRecording(): UseRecordingReturn {
   const startRecording = async () => {
     try {
       setCheckingPermission(true);
+      meteringSamplesRef.current = [];
+      setWaveform([]);
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setPermissionStatus('granted');
@@ -125,6 +139,7 @@ export function useRecording(): UseRecordingReturn {
     try {
       await audioRecorder.stop();
       setPhase('stopped');
+      setWaveform(normalizeWaveform(meteringSamplesRef.current));
       const uri = audioRecorder.uri;
 
       if (uri && uri.length > 0) {
@@ -144,6 +159,8 @@ export function useRecording(): UseRecordingReturn {
     }
     setPhase('idle');
     setAudioUri(null);
+    meteringSamplesRef.current = [];
+    setWaveform([]);
   };
 
   return {
@@ -153,6 +170,7 @@ export function useRecording(): UseRecordingReturn {
     audioUri,
     permissionStatus,
     checkingPermission,
+    waveform,
     startRecording,
     pauseRecording,
     resumeRecording,
