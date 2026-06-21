@@ -24,7 +24,7 @@ describe('searchTracks', () => {
     expect(res).toEqual([
       { itunesTrackId: 1, trackName: '좋은날', artistName: '아이유', artworkUrl: 'http://a/100.jpg', previewUrl: 'http://a/p.m4a' },
     ]);
-    const calledUrl = (fetchMock.mock.calls[0][0] as string);
+    const calledUrl = String((fetchMock.mock.calls as any[][])[0][0]);
     expect(calledUrl).toContain('country=kr');
     expect(calledUrl).toContain('media=music');
     expect(calledUrl).toContain(encodeURIComponent('아이유'));

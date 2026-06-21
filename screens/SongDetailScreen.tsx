@@ -25,6 +25,7 @@ import {
 } from '../lib/database';
 import { saveAudioLocally } from '../lib/storage';
 import RecorderModal from '../components/RecorderModal';
+import { AlbumArt } from '../components/AlbumArt';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { useTheme } from '../contexts/ThemeContext';
@@ -231,10 +232,10 @@ export default function SongDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string) => {
+  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number) => {
     try {
       const { fileName, localUri } = await saveAudioLocally(songId, audioUri);
-      await addVersion(songId, fileName, localUri, rating, undefined, memo);
+      await addVersion(songId, fileName, localUri, rating, duration, memo, { waveform });
       await fetchSong();
     } catch (error) {
       console.error('녹음 저장 실패:', error);
@@ -263,9 +264,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* 곡 정보 */}
         <View style={styles.songHeader}>
-          <View style={styles.albumArt}>
-            <Ionicons name="musical-notes" size={48} color={colors.textMuted} />
-          </View>
+          <AlbumArt uri={song.artworkUrl} size={160} iconSize={48} borderRadius={borderRadius.lg} />
           <Text style={styles.songTitle}>{song.title}</Text>
           {song.artist && (
             <Text style={styles.songArtist}>{song.artist}</Text>
@@ -399,6 +398,19 @@ export default function SongDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.menuItem}
+                onPress={() => {
+                  if (menuState.version) {
+                    const vId = menuState.version.id;
+                    closeMenu();
+                    navigation.navigate('TrimEditor', { versionId: vId });
+                  }
+                }}
+              >
+                <Ionicons name="cut-outline" size={20} color={colors.text} />
+                <Text style={styles.menuItemText}>구간 편집</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
                 onPress={() => menuState.version && handleDeleteVersion(menuState.version.id)}
               >
                 <Ionicons name="trash-outline" size={20} color={colors.danger} />
@@ -450,15 +462,6 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
-  },
-  albumArt: {
-    width: 160,
-    height: 160,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
   },
   songTitle: {
     ...typography.h1,

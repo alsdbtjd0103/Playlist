@@ -10,6 +10,8 @@ import {
   getVersionsBySong,
   updateVersion,
   deleteVersion,
+  applyTrimToVersion,
+  createTrimmedVersion,
   createPlaylist,
   getPlaylists,
   addToPlaylist,
@@ -243,5 +245,44 @@ describe('대표 버전 ↔ 대표곡 플레이리스트 동기화', () => {
     expect(detail?.items).toHaveLength(1);
     expect(detail?.items[0].song.title).toBe('조인곡');
     expect(detail?.items[0].version.id).toBe(versionId);
+  });
+});
+
+describe('Version trim/waveform', () => {
+  it('addVersion extra로 waveform/trim/editedFrom 저장', async () => {
+    const songId = await addSong('곡');
+    const vid = await addVersion(songId, 'f.m4a', 'file:///f.m4a', 4, 12, '메모', {
+      waveform: [0.1, 0.5, 0.9], trim: { start: 1, end: 5 }, editedFrom: 'orig',
+    });
+    const v = await getVersion(vid);
+    expect(v?.waveform).toEqual([0.1, 0.5, 0.9]);
+    expect(v?.trim).toEqual({ start: 1, end: 5 });
+    expect(v?.editedFrom).toBe('orig');
+  });
+
+  it('applyTrimToVersion은 기존 버전에 trim만 설정(덮어쓰기)', async () => {
+    const songId = await addSong('곡');
+    const vid = await addVersion(songId, 'f.m4a', 'file:///f.m4a', 3);
+    await applyTrimToVersion(vid, { start: 2, end: 8 });
+    const v = await getVersion(vid);
+    expect(v?.trim).toEqual({ start: 2, end: 8 });
+    expect(v?.storageUrl).toBe('file:///f.m4a'); // 파일 그대로
+  });
+
+  it('createTrimmedVersion은 같은 파일을 가리키는 새 버전을 만든다(원본 보존)', async () => {
+    const songId = await addSong('곡');
+    const src = await addVersion(songId, 'f.m4a', 'file:///f.m4a', 5, 30, '원본', { waveform: [0.2, 0.4] });
+    const newId = await createTrimmedVersion(src, { start: 3, end: 10 });
+    expect(newId).not.toBe(src);
+    const nv = await getVersion(newId);
+    const ov = await getVersion(src);
+    expect(ov?.trim).toBeUndefined();             // 원본 보존
+    expect(nv?.storageUrl).toBe('file:///f.m4a');  // 같은 파일
+    expect(nv?.trim).toEqual({ start: 3, end: 10 });
+    expect(nv?.editedFrom).toBe(src);
+    expect(nv?.rating).toBe(5);                    // 원본 rating 승계
+    expect(nv?.waveform).toEqual([0.2, 0.4]);      // 파형 승계
+    const list = await getVersionsBySong(songId);
+    expect(list).toHaveLength(2);
   });
 });
