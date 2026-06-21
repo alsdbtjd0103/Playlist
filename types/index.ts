@@ -64,4 +64,5 @@ export type RootStackParamList = {
   SongDetail: { songId: string };
   Playlists: undefined;
   PlaylistDetail: { playlistId: string };
+  TrimEditor: { versionId: string };
 };

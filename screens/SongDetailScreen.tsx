@@ -391,6 +391,19 @@ export default function SongDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.menuItem}
+                onPress={() => {
+                  if (menuState.version) {
+                    const vId = menuState.version.id;
+                    closeMenu();
+                    navigation.navigate('TrimEditor', { versionId: vId });
+                  }
+                }}
+              >
+                <Ionicons name="cut-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.menuItemText}>구간 편집</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
                 onPress={() => menuState.version && handleDeleteVersion(menuState.version.id)}
               >
                 <Ionicons name="trash-outline" size={20} color={colors.error} />

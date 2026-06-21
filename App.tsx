@@ -16,6 +16,7 @@ TrackPlayer.registerPlaybackService(() => PlaybackService);
 
 import HomeScreen from './screens/HomeScreen';
 import SongDetailScreen from './screens/SongDetailScreen';
+import TrimEditorScreen from './screens/TrimEditorScreen';
 import PlaylistsScreen from './screens/PlaylistsScreen';
 import PlaylistDetailScreen from './screens/PlaylistDetailScreen';
 import { PlayerProvider } from './contexts/PlayerContext';
@@ -50,6 +51,7 @@ function HomeStackScreen() {
     >
       <HomeStack.Screen name="Home" component={HomeScreen} />
       <HomeStack.Screen name="SongDetail" component={SongDetailScreen} />
+      <HomeStack.Screen name="TrimEditor" component={TrimEditorScreen} options={{ presentation: 'fullScreenModal' }} />
     </HomeStack.Navigator>
   );
 }
