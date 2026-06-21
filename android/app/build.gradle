@@ -108,6 +108,9 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            // 개발(debug) 빌드는 패키지명에 .dev 접미사를 붙여
+            // release 로 설치된 preview 앱(com.playlist.app)과 폰에 공존시킨다.
+            applicationIdSuffix ".dev"
         }
         release {
             // Caution! In production, you need to generate your own keystore file.

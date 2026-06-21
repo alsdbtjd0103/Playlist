@@ -1,0 +1,4 @@
+<resources>
+  <!-- debug(개발) 빌드 전용 앱 이름. release(preview/production)는 main 의 값을 사용. -->
+  <string name="app_name">방구석 플레이리스트 (dev)</string>
+</resources>
