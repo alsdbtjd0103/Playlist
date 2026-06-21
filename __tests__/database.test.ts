@@ -189,6 +189,25 @@ describe('플레이리스트(Playlist) 관리', () => {
   });
 });
 
+describe('addSong 메타데이터', () => {
+  it('meta를 전달하면 Song에 artworkUrl/itunesTrackId/previewUrl이 저장된다', async () => {
+    const id = await addSong('좋은날', '아이유', {
+      artworkUrl: 'http://a/100.jpg', itunesTrackId: 42, previewUrl: 'http://a/p.m4a',
+    });
+    const song = await getSong(id);
+    expect(song?.artworkUrl).toBe('http://a/100.jpg');
+    expect(song?.itunesTrackId).toBe(42);
+    expect(song?.previewUrl).toBe('http://a/p.m4a');
+  });
+
+  it('meta 없이도 기존처럼 동작한다', async () => {
+    const id = await addSong('무제');
+    const song = await getSong(id);
+    expect(song?.title).toBe('무제');
+    expect(song?.artworkUrl).toBeUndefined();
+  });
+});
+
 describe('대표 버전 ↔ 대표곡 플레이리스트 동기화', () => {
   it('대표 버전을 지정하면 대표곡 플레이리스트에 자동 포함된다', async () => {
     const songId = await addSong('대표곡테스트');

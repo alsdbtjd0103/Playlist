@@ -20,7 +20,13 @@ const generateId = (): string => {
 
 // === 곡 관리 ===
 
-export const addSong = async (title: string, artist?: string): Promise<string> => {
+export interface SongMeta {
+  artworkUrl?: string;
+  itunesTrackId?: number;
+  previewUrl?: string;
+}
+
+export const addSong = async (title: string, artist?: string, meta?: SongMeta): Promise<string> => {
   const now = new Date();
   const songId = generateId();
 
@@ -31,6 +37,9 @@ export const addSong = async (title: string, artist?: string): Promise<string> =
     createdAt: now,
     updatedAt: now,
     defaultVersionId: undefined,
+    artworkUrl: meta?.artworkUrl,
+    itunesTrackId: meta?.itunesTrackId,
+    previewUrl: meta?.previewUrl,
   };
 
   const songs = await getAllSongs();

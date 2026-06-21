@@ -6,6 +6,9 @@ export interface Song {
   createdAt: Date;
   updatedAt: Date;
   defaultVersionId?: string;
+  artworkUrl?: string;
+  itunesTrackId?: number;
+  previewUrl?: string;
 }
 
 // 녹음 버전
