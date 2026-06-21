@@ -18,4 +18,8 @@ describe('isPastTrimEnd', () => {
     expect(isPastTrimEnd(5, { start: 1, end: 5 })).toBe(true);
     expect(isPastTrimEnd(4.9, { start: 1, end: 5 })).toBe(false);
   });
+  it('정확히 end 직전 위치는 멈추지 않는다(폴링 경계)', () => {
+    expect(isPastTrimEnd(4.99, { start: 0, end: 5 })).toBe(false);
+    expect(isPastTrimEnd(5.0, { start: 0, end: 5 })).toBe(true);
+  });
 });

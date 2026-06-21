@@ -9,6 +9,7 @@ import TrackPlayer, {
   AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
 import { Song, Version } from '../types';
+import { isPastTrimEnd } from '../lib/trim';
 
 interface PlayingTrack {
   song: Song;
@@ -137,6 +138,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (newTrack) {
           setCurrentTrackState(newTrack);
           setPlaylistState(prev => prev ? { ...prev, currentIndex: event.index! } : null);
+          if (newTrack.version.trim) { await TrackPlayer.seekTo(newTrack.version.trim.start); }
         }
       }
     });
@@ -163,6 +165,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         duration: track.version.duration,
       });
       await TrackPlayer.play();
+      if (track.version.trim) { await TrackPlayer.seekTo(track.version.trim.start); }
       setCurrentTrackState(track);
     } catch (error) {
       console.error('트랙 설정 실패:', error);
@@ -215,6 +218,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       await TrackPlayer.add(tracks);
       await TrackPlayer.skip(startIndex);
       await TrackPlayer.play();
+      const startTrim = items[startIndex]?.version.trim;
+      if (startTrim) { await TrackPlayer.seekTo(startTrim.start); }
 
       setPlaylistState({
         items,
@@ -240,6 +245,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       console.error('다음 곡 재생 실패:', error);
     }
   }, [playlistState]);
+
+  // trim.end 도달 시 정지/다음 곡
+  useEffect(() => {
+    const trim = currentTrack?.version.trim;
+    if (!trim || !isPlaying) return;
+    if (isPastTrimEnd(progress.position, trim)) {
+      if (playlistState && playlistState.items.length > 1) {
+        playNext();
+      } else {
+        TrackPlayer.pause();
+      }
+    }
+  }, [progress.position, currentTrack, isPlaying, playlistState, playNext]);
 
   const playPrevious = useCallback(async () => {
     if (!playlistState) return;
