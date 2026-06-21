@@ -42,6 +42,14 @@ jest.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
+// --- expo-font / 구글 폰트: 네이티브 폰트 로딩 없이 즉시 로드됨으로 처리 ---
+jest.mock('expo-font', () => ({
+  useFonts: () => [true],
+  isLoaded: () => true,
+  loadAsync: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('@expo-google-fonts/manrope', () => ({ Manrope_800ExtraBold: 'Manrope_800ExtraBold' }));
+
 // --- expo-vector-icons: 네이티브 폰트 로딩 없이 가벼운 스텁 ---
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
