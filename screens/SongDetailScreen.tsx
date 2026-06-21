@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, SongWithVersions, Version } from '../types';
 import {
@@ -157,9 +158,11 @@ export default function SongDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  useEffect(() => {
-    fetchSong();
-  }, [songId]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchSong();
+    }, [songId])
+  );
 
   const handleSetDefaultVersion = async (versionId: string) => {
     closeMenu();

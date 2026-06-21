@@ -116,9 +116,7 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
           <Ionicons name="chevron-down" size={28} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>구간 편집</Text>
-        <TouchableOpacity onPress={handleOverwrite} style={styles.overwriteButton} testID="trim-overwrite-button">
-          <Text style={styles.overwriteText}>덮어쓰기</Text>
-        </TouchableOpacity>
+        <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.body}>
@@ -147,18 +145,28 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        style={[styles.saveButton, saving && styles.disabled]}
-        onPress={handleSave}
-        disabled={saving}
-        testID="trim-save-button"
-      >
-        {saving ? (
-          <ActivityIndicator color={colors.onAccent} />
-        ) : (
-          <Text style={styles.saveText}>새 버전으로 저장</Text>
-        )}
-      </TouchableOpacity>
+      <View style={styles.saveRow}>
+        <TouchableOpacity
+          style={[styles.overwriteButton, saving && styles.disabled]}
+          onPress={handleOverwrite}
+          disabled={saving}
+          testID="trim-overwrite-button"
+        >
+          <Text style={styles.overwriteButtonText}>원본 덮어쓰기</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.saveButton, saving && styles.disabled]}
+          onPress={handleSave}
+          disabled={saving}
+          testID="trim-save-button"
+        >
+          {saving ? (
+            <ActivityIndicator color={colors.onAccent} />
+          ) : (
+            <Text style={styles.saveText}>새 버전으로 저장</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -174,8 +182,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     paddingVertical: spacing.md,
   },
   headerTitle: { ...typography.h3, color: colors.text },
-  overwriteButton: { paddingHorizontal: spacing.sm },
-  overwriteText: { ...typography.bodySmall, color: colors.danger },
+  headerSpacer: { width: 28 },
   body: {
     flex: 1,
     alignItems: 'center',
@@ -197,9 +204,22 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     marginTop: spacing.lg,
   },
   previewText: { ...typography.body, fontWeight: '600', color: colors.onAccent },
-  saveButton: {
-    backgroundColor: colors.accentStrong,
+  saveRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
     margin: spacing.lg,
+  },
+  overwriteButton: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  overwriteButtonText: { ...typography.body, fontWeight: '600', color: colors.danger },
+  saveButton: {
+    flex: 1,
+    backgroundColor: colors.accentStrong,
     paddingVertical: spacing.lg,
     borderRadius: borderRadius.md,
     alignItems: 'center',
