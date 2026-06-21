@@ -229,26 +229,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [isReady]);
 
   const playNext = useCallback(async () => {
+    if (!playlistState) return;
+    const { currentIndex, items } = playlistState;
+    if (items.length === 0) return;
+    const nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
     try {
-      await TrackPlayer.skipToNext();
+      await TrackPlayer.skip(nextIndex);
+      await TrackPlayer.play();
     } catch (error) {
-      // 마지막 트랙인 경우 처음으로
-      if (playlistState?.repeatMode === 'all') {
-        await TrackPlayer.skip(0);
-        await TrackPlayer.play();
-      }
+      console.error('다음 곡 재생 실패:', error);
     }
   }, [playlistState]);
 
   const playPrevious = useCallback(async () => {
+    if (!playlistState) return;
+    const { currentIndex, items } = playlistState;
+    if (items.length === 0) return;
+    const prevIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
     try {
-      await TrackPlayer.skipToPrevious();
+      await TrackPlayer.skip(prevIndex);
+      await TrackPlayer.play();
     } catch (error) {
-      // 첫 트랙인 경우 마지막으로
-      if (playlistState?.repeatMode === 'all' && playlistState.items.length > 0) {
-        await TrackPlayer.skip(playlistState.items.length - 1);
-        await TrackPlayer.play();
-      }
+      console.error('이전 곡 재생 실패:', error);
     }
   }, [playlistState]);
 
