@@ -13,6 +13,7 @@ export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 export interface UseRecordingReturn {
   // 상태
   isRecording: boolean;
+  isPaused: boolean;
   recordingTime: number;
   audioUri: string | null;
   permissionStatus: PermissionStatus;
@@ -20,6 +21,8 @@ export interface UseRecordingReturn {
 
   // 액션
   startRecording: () => Promise<void>;
+  pauseRecording: () => void;
+  resumeRecording: () => void;
   stopRecording: () => Promise<void>;
   resetRecording: () => void;
   checkPermissions: () => Promise<void>;
@@ -30,6 +33,7 @@ export function useRecording(): UseRecordingReturn {
   const recorderState = useAudioRecorderState(audioRecorder);
 
   const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('undetermined');
   const [checkingPermission, setCheckingPermission] = useState(false);
 
@@ -72,6 +76,7 @@ export function useRecording(): UseRecordingReturn {
       audioRecorder.record();
       setPermissionStatus('granted');
       setAudioUri(null);
+      setIsPaused(false);
       setCheckingPermission(false);
     } catch (error: any) {
       console.error('녹음 시작 실패:', error);
@@ -93,9 +98,28 @@ export function useRecording(): UseRecordingReturn {
     }
   };
 
+  const pauseRecording = () => {
+    try {
+      audioRecorder.pause();
+      setIsPaused(true);
+    } catch (error) {
+      console.error('녹음 일시정지 실패:', error);
+    }
+  };
+
+  const resumeRecording = () => {
+    try {
+      audioRecorder.record();
+      setIsPaused(false);
+    } catch (error) {
+      console.error('녹음 재개 실패:', error);
+    }
+  };
+
   const stopRecording = async () => {
     try {
       await audioRecorder.stop();
+      setIsPaused(false);
       const uri = audioRecorder.uri;
 
       if (uri && uri.length > 0) {
@@ -110,19 +134,23 @@ export function useRecording(): UseRecordingReturn {
   };
 
   const resetRecording = () => {
-    if (recorderState.isRecording) {
+    if (recorderState.isRecording || isPaused) {
       audioRecorder.stop();
     }
+    setIsPaused(false);
     setAudioUri(null);
   };
 
   return {
     isRecording: recorderState.isRecording,
-    recordingTime: Math.round(recorderState.durationMillis / 1000), // 밀리초를 초로 변환
+    isPaused,
+    recordingTime: Math.round(recorderState.durationMillis / 1000),
     audioUri,
     permissionStatus,
     checkingPermission,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
     resetRecording,
     checkPermissions,

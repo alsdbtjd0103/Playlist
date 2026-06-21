@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { View, BackHandler, ToastAndroid, Platform, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer, DefaultTheme, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -186,7 +187,7 @@ export default function App() {
   }, [handleBackPress]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
       <SafeAreaProvider>
         <PlayerProvider>
           <NavigationContainer ref={navigationRef} theme={DarkTheme}>
@@ -213,6 +214,6 @@ export default function App() {
           <StatusBar style="light" />
         </PlayerProvider>
       </SafeAreaProvider>
-    </View>
+    </GestureHandlerRootView>
   );
 }

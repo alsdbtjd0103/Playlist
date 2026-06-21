@@ -24,11 +24,14 @@ interface RecorderModalProps {
 export default function RecorderModal({ visible, onClose, onSave }: RecorderModalProps) {
   const {
     isRecording,
+    isPaused,
     recordingTime,
     audioUri,
     permissionStatus,
     checkingPermission,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
     resetRecording,
     checkPermissions,
@@ -124,7 +127,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
             )}
 
             {/* 녹음 시작 버튼 */}
-            {permissionStatus !== 'denied' && !audioUri && !isRecording && (
+            {permissionStatus !== 'denied' && !audioUri && !isRecording && !isPaused && (
               <View style={styles.startContainer}>
                 <TouchableOpacity
                   style={styles.startButton}
@@ -141,21 +144,45 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
               </View>
             )}
 
-            {/* 녹음 중 */}
-            {isRecording && (
+            {/* 녹음 중 / 일시정지 중 */}
+            {(isRecording || isPaused) && !audioUri && (
               <View style={styles.recordingContainer}>
                 <View style={styles.recordingIndicator}>
-                  <View style={styles.recordingDot} />
-                  <Text style={styles.recordingText}>REC</Text>
+                  {isPaused ? (
+                    <>
+                      <Ionicons name="pause" size={16} color={colors.textSecondary} />
+                      <Text style={styles.pausedText}>일시정지</Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.recordingDot} />
+                      <Text style={styles.recordingText}>REC</Text>
+                    </>
+                  )}
                 </View>
-                <Text style={styles.recordingTime}>{formatTime(recordingTime)}</Text>
-                <TouchableOpacity
-                  style={styles.stopButton}
-                  onPress={stopRecording}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="stop" size={32} color={colors.textPrimary} />
-                </TouchableOpacity>
+                <Text style={[styles.recordingTime, isPaused && styles.recordingTimePaused]}>
+                  {formatTime(recordingTime)}
+                </Text>
+                <View style={styles.recordingControls}>
+                  <TouchableOpacity
+                    style={styles.pauseResumeButton}
+                    onPress={isPaused ? resumeRecording : pauseRecording}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={isPaused ? 'play' : 'pause'}
+                      size={28}
+                      color={colors.textPrimary}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.stopButton}
+                    onPress={stopRecording}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="stop" size={28} color={colors.textPrimary} />
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
@@ -310,16 +337,38 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.error,
   },
+  pausedText: {
+    ...typography.h3,
+    color: colors.textSecondary,
+  },
   recordingTime: {
     fontSize: 48,
     fontWeight: 'bold',
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
   },
+  recordingTimePaused: {
+    color: colors.textSecondary,
+  },
+  recordingControls: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    alignItems: 'center',
+  },
+  pauseResumeButton: {
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   stopButton: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.lg,
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.error,
     justifyContent: 'center',
     alignItems: 'center',

@@ -34,6 +34,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
   const [modalVisible, setModalVisible] = useState(false);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   useFocusEffect(
     useCallback(() => {
@@ -100,6 +101,16 @@ export default function PlaylistsScreen({ navigation }: Props) {
     );
   };
 
+  const getSortedPlaylists = (items: Playlist[]) => {
+    const defaultPlaylist = items.filter(p => p.isDefault);
+    const rest = items.filter(p => !p.isDefault).sort((a, b) => {
+      const aTime = a.createdAt.getTime();
+      const bTime = b.createdAt.getTime();
+      return sortOrder === 'newest' ? bTime - aTime : aTime - bTime;
+    });
+    return [...defaultPlaylist, ...rest];
+  };
+
   const renderPlaylistCard = ({ item }: { item: Playlist }) => (
     <TouchableOpacity
       style={styles.playlistCard}
@@ -152,13 +163,28 @@ export default function PlaylistsScreen({ navigation }: Props) {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={playlists}
-          renderItem={renderPlaylistCard}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-        />
+        <>
+          {playlists.filter(p => !p.isDefault).length > 0 && (
+            <View style={styles.sortRow}>
+              <TouchableOpacity
+                style={styles.sortButton}
+                onPress={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
+              >
+                <Ionicons name="swap-vertical" size={16} color={colors.textPrimary} />
+                <Text style={styles.sortButtonText}>
+                  {sortOrder === 'newest' ? '최신순' : '오래된순'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          <FlatList
+            data={getSortedPlaylists(playlists)}
+            renderItem={renderPlaylistCard}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+          />
+        </>
       )}
 
       {/* 생성 모달 */}
@@ -248,6 +274,27 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingTop: 0,
     gap: spacing.sm,
+  },
+  sortRow: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    alignItems: 'flex-end',
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sortButtonText: {
+    fontSize: 12,
+    color: colors.textPrimary,
+    fontWeight: '500',
   },
   playlistCard: {
     flexDirection: 'row',

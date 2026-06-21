@@ -3,21 +3,31 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  ScrollView,
   Modal,
-  ActionSheetIOS,
-  Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  NestableDraggableFlatList,
+  NestableScrollContainer,
+  ScaleDecorator,
+  RenderItemParams,
+} from 'react-native-draggable-flatlist';
 import { RootStackParamList, Song, Version } from '../types';
-import { getPlaylistWithDetails, removeFromPlaylist, getAllSongs, getVersionsBySong, addToPlaylist } from '../lib/database';
+import {
+  getPlaylistWithDetails,
+  removeFromPlaylist,
+  getAllSongs,
+  getVersionsBySong,
+  addToPlaylist,
+  reorderPlaylistItems,
+} from '../lib/database';
 import { usePlayer } from '../contexts/PlayerContext';
 import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
@@ -27,18 +37,21 @@ interface PlaylistItem {
   id: string;
   versionId: string;
   order: number;
+  addedAt: Date;
   version: Version;
   song: Song;
 }
 
-export default function PlaylistDetailScreen({ navigation, route }: Props) {
+type SortOrder = null | 'newest' | 'oldest';
+
+export default function PlaylistDetailScreen({ route }: Props) {
   const { playlistId } = route.params;
   const [playlist, setPlaylistData] = useState<any>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [availableSongs, setAvailableSongs] = useState<{ song: Song; versions: Version[] }[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
-  const [sortOrder, setSortOrder] = useState<'default' | 'title' | 'ratingDesc' | 'ratingAsc'>('default');
+  const [sortOrder, setSortOrder] = useState<SortOrder>(null);
   const { setPlaylist, playlistState } = usePlayer();
 
   useFocusEffect(
@@ -59,20 +72,14 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
   const fetchAvailableSongs = async () => {
     try {
       setLoading(true);
-      console.log('Starting to fetch songs...');
       const songs = await getAllSongs();
-      console.log('Fetched songs:', songs.length);
       const songsWithVersions = await Promise.all(
         songs.map(async (song) => ({
           song,
           versions: await getVersionsBySong(song.id),
         }))
       );
-      console.log('Songs with versions:', songsWithVersions.length);
-      // 버전이 있는 곡만 표시
-      const filtered = songsWithVersions.filter(s => s.versions.length > 0);
-      console.log('Filtered songs (with versions):', filtered.length);
-      setAvailableSongs(filtered);
+      setAvailableSongs(songsWithVersions.filter(s => s.versions.length > 0));
     } catch (error) {
       console.error('곡 목록 로드 실패:', error);
     } finally {
@@ -101,16 +108,13 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
       Alert.alert('알림', '추가할 곡을 선택해주세요.');
       return;
     }
-
     try {
       setLoading(true);
       const currentOrder = playlist.items.length;
       const versionsArray = Array.from(selectedVersions);
-      
       for (let i = 0; i < versionsArray.length; i++) {
         await addToPlaylist(playlistId, versionsArray[i], currentOrder + i);
       }
-
       setAddModalVisible(false);
       setSelectedVersions(new Set());
       await fetchPlaylist();
@@ -123,54 +127,30 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
     }
   };
 
-  const sortLabels = {
-    default: '기본 순서',
-    title: '제목순',
-    ratingDesc: '별점 높은 순',
-    ratingAsc: '별점 낮은 순',
-  };
-
-  const handleSortPress = () => {
-    const options = ['기본 순서', '제목순', '별점 높은 순', '별점 낮은 순', '취소'];
-    const sortKeys: Array<'default' | 'title' | 'ratingDesc' | 'ratingAsc'> = ['default', 'title', 'ratingDesc', 'ratingAsc'];
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex: 4, title: '정렬 기준' },
-        (idx) => { if (idx < 4) setSortOrder(sortKeys[idx]); }
-      );
-    } else {
-      Alert.alert(
-        '정렬 기준',
-        undefined,
-        [
-          ...sortKeys.map((key, i) => ({ text: options[i], onPress: () => setSortOrder(key) })),
-          { text: '취소', style: 'cancel' as const },
-        ]
-      );
-    }
-  };
-
-  const getSortedItems = (items: PlaylistItem[]) => {
-    if (sortOrder === 'default') return items;
+  const getSortedItems = (items: PlaylistItem[]): PlaylistItem[] => {
+    if (!sortOrder) return items;
     return [...items].sort((a, b) => {
-      if (sortOrder === 'title') return a.song.title.localeCompare(b.song.title, 'ko');
-      if (sortOrder === 'ratingDesc') return b.version.rating - a.version.rating;
-      if (sortOrder === 'ratingAsc') return a.version.rating - b.version.rating;
-      return 0;
+      const aTime = new Date(a.version.recordedAt).getTime();
+      const bTime = new Date(b.version.recordedAt).getTime();
+      return sortOrder === 'newest' ? bTime - aTime : aTime - bTime;
     });
   };
 
   const handleTrackPress = (index: number) => {
-    const sortedItems = getSortedItems(playlist.items);
-    const playlistItems = sortedItems.map((item: PlaylistItem) => ({
-      song: item.song,
-      version: item.version,
-    }));
-    setPlaylist(playlistItems, index);
+    const sorted = getSortedItems(playlist.items);
+    setPlaylist(sorted.map((item: PlaylistItem) => ({ song: item.song, version: item.version })), index);
   };
 
-  // 현재 재생 중인 곡의 인덱스 계산
+  const handleDragEnd = async ({ data }: { data: PlaylistItem[] }) => {
+    setPlaylistData((prev: any) => ({ ...prev, items: data }));
+    try {
+      await reorderPlaylistItems(playlistId, data.map(item => item.id));
+    } catch (error) {
+      console.error('순서 저장 실패:', error);
+      await fetchPlaylist();
+    }
+  };
+
   const currentPlayingIndex = playlistState && playlist && playlistState.items.length === playlist.items.length
     ? playlistState.currentIndex
     : -1;
@@ -180,7 +160,6 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
       Alert.alert('알림', '기본 플레이리스트에서는 항목을 삭제할 수 없습니다.');
       return;
     }
-
     Alert.alert(
       '항목 제거',
       `"${item.song.title}"을(를) 플레이리스트에서 제거하시겠습니까?`,
@@ -203,34 +182,62 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
     );
   };
 
-  const renderTrackItem = ({ item, index }: { item: PlaylistItem; index: number }) => (
-    <TouchableOpacity
-      style={[styles.trackItem, index === currentPlayingIndex && styles.trackItemActive]}
-      onPress={() => handleTrackPress(index)}
-      onLongPress={() => handleRemoveItem(item)}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.trackNumber, index === currentPlayingIndex && styles.trackNumberActive]}>
-        {index === currentPlayingIndex ? (
-          <Ionicons name="musical-note" size={14} color={colors.textPrimary} />
-        ) : (
-          <Text style={styles.trackNumberText}>{index + 1}</Text>
-        )}
-      </View>
-      <View style={styles.trackInfo}>
-        <Text style={[styles.trackTitle, index === currentPlayingIndex && styles.trackTitleActive]} numberOfLines={1}>
-          {item.song.title}
-        </Text>
-        {item.song.artist && (
-          <Text style={styles.trackArtist} numberOfLines={1}>{item.song.artist}</Text>
-        )}
-      </View>
-      <View style={styles.trackRating}>
-        <Ionicons name="star" size={14} color={colors.warning} />
-        <Text style={styles.ratingText}>{item.version.rating}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const cycleSortOrder = () => {
+    setSortOrder(prev => {
+      if (prev === null) return 'newest';
+      if (prev === 'newest') return 'oldest';
+      return null;
+    });
+  };
+
+  const sortLabel = sortOrder === 'newest' ? '최신순' : sortOrder === 'oldest' ? '오래된순' : '직접순서';
+  const isDragEnabled = sortOrder === null;
+
+  const renderTrackItem = ({ item, getIndex, drag, isActive }: RenderItemParams<PlaylistItem>) => {
+    const index = getIndex() ?? 0;
+    const isPlaying = index === currentPlayingIndex;
+
+    return (
+      <ScaleDecorator activeScale={1.03}>
+        <TouchableOpacity
+          style={[styles.trackItem, isPlaying && styles.trackItemActive, isActive && styles.trackItemDragging]}
+          onPress={() => handleTrackPress(index)}
+          onLongPress={() => !isActive && handleRemoveItem(item)}
+          activeOpacity={0.7}
+          disabled={isActive}
+        >
+          <View style={[styles.trackNumber, isPlaying && styles.trackNumberActive]}>
+            {isPlaying ? (
+              <Ionicons name="musical-note" size={14} color={colors.textPrimary} />
+            ) : (
+              <Text style={styles.trackNumberText}>{index + 1}</Text>
+            )}
+          </View>
+          <View style={styles.trackInfo}>
+            <Text style={[styles.trackTitle, isPlaying && styles.trackTitleActive]} numberOfLines={1}>
+              {item.song.title}
+            </Text>
+            {item.song.artist && (
+              <Text style={styles.trackArtist} numberOfLines={1}>{item.song.artist}</Text>
+            )}
+          </View>
+          <View style={styles.trackRating}>
+            <Ionicons name="star" size={14} color={colors.warning} />
+            <Text style={styles.ratingText}>{item.version.rating}</Text>
+          </View>
+          {isDragEnabled && (
+            <TouchableOpacity
+              onPressIn={drag}
+              style={styles.dragHandle}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="reorder-three" size={22} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+      </ScaleDecorator>
+    );
+  };
 
   if (!playlist) {
     return (
@@ -242,7 +249,6 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* 헤더 */}
       <View style={styles.header}>
         <View style={styles.logo}>
           <Ionicons name="musical-notes" size={20} color={colors.primary} />
@@ -250,16 +256,20 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
         </View>
         <View style={styles.headerActions}>
           {playlist.items.length > 0 && (
-            <TouchableOpacity style={styles.sortButton} onPress={handleSortPress}>
-              <Ionicons name="funnel-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.sortButtonText}>{sortLabels[sortOrder]}</Text>
+            <TouchableOpacity
+              style={[styles.sortButton, sortOrder !== null && styles.sortButtonActive]}
+              onPress={cycleSortOrder}
+            >
+              <Ionicons
+                name={sortOrder !== null ? 'swap-vertical' : 'reorder-four-outline'}
+                size={16}
+                color={colors.textPrimary}
+              />
+              <Text style={styles.sortButtonText}>{sortLabel}</Text>
             </TouchableOpacity>
           )}
           {!playlist.isDefault && (
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={handleOpenAddModal}
-            >
+            <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
               <Ionicons name="add" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
           )}
@@ -273,17 +283,13 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
           </View>
           <Text style={styles.emptyTitle}>플레이리스트가 비어있습니다</Text>
           {!playlist.isDefault && (
-            <TouchableOpacity
-              style={styles.emptyAddButton}
-              onPress={handleOpenAddModal}
-            >
+            <TouchableOpacity style={styles.emptyAddButton} onPress={handleOpenAddModal}>
               <Ionicons name="add" size={24} color={colors.background} />
             </TouchableOpacity>
           )}
         </View>
       ) : (
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* 플레이리스트 정보 헤더 */}
+        <NestableScrollContainer style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.playlistHeader}>
             <View style={styles.playlistCover}>
               <Ionicons name="musical-notes" size={48} color={colors.textSecondary} />
@@ -291,10 +297,7 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
             <View style={styles.playlistInfo}>
               <Text style={styles.playlistTitle}>{playlist.name}</Text>
               <Text style={styles.playlistCount}>{playlist.items.length}곡</Text>
-              <TouchableOpacity
-                style={styles.playAllButton}
-                onPress={() => handleTrackPress(0)}
-              >
+              <TouchableOpacity style={styles.playAllButton} onPress={() => handleTrackPress(0)}>
                 <Ionicons name="play" size={20} color={colors.background} />
                 <Text style={styles.playAllText}>전체 재생</Text>
               </TouchableOpacity>
@@ -302,18 +305,18 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
           </View>
 
           <View style={styles.trackListSection}>
-            <FlatList
+            <NestableDraggableFlatList
               data={getSortedItems(playlist.items)}
               renderItem={renderTrackItem}
               keyExtractor={(item) => item.id}
-              scrollEnabled={false}
+              onDragEnd={isDragEnabled ? handleDragEnd : undefined}
+              activationDistance={isDragEnabled ? 5 : 999}
               contentContainerStyle={styles.trackList}
             />
           </View>
-        </ScrollView>
+        </NestableScrollContainer>
       )}
 
-      {/* 곡 추가 모달 */}
       <Modal
         visible={addModalVisible}
         animationType="slide"
@@ -337,9 +340,7 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
               <View style={styles.modalLoading}>
                 <Ionicons name="musical-notes-outline" size={64} color={colors.textTertiary} />
                 <Text style={styles.emptyModalText}>추가할 수 있는 곡이 없습니다</Text>
-                <Text style={styles.emptyModalSubtext}>
-                  먼저 곡을 녹음해보세요!
-                </Text>
+                <Text style={styles.emptyModalSubtext}>먼저 곡을 녹음해보세요!</Text>
               </View>
             ) : (
               <>
@@ -355,7 +356,6 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
                         const isAlreadyInPlaylist = playlist.items.some(
                           (pItem: PlaylistItem) => pItem.versionId === version.id
                         );
-                        
                         return (
                           <TouchableOpacity
                             key={version.id}
@@ -401,9 +401,7 @@ export default function PlaylistDetailScreen({ navigation, route }: Props) {
                 </ScrollView>
 
                 <View style={styles.modalFooter}>
-                  <Text style={styles.selectedCount}>
-                    {selectedVersions.size}개 선택됨
-                  </Text>
+                  <Text style={styles.selectedCount}>{selectedVersions.size}개 선택됨</Text>
                   <TouchableOpacity
                     style={[
                       styles.addConfirmButton,
@@ -433,26 +431,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.xxl,
     backgroundColor: colors.background,
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  errorIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  errorText: {
-    ...typography.h3,
-    color: colors.textSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -471,6 +450,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
     letterSpacing: -0.5,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sortButtonActive: {
+    backgroundColor: colors.surfaceLight,
+    borderColor: colors.textSecondary,
+  },
+  sortButtonText: {
+    ...typography.caption,
+    color: colors.textPrimary,
+    fontWeight: '500',
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,
@@ -518,8 +529,8 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
   trackListSection: {
-    padding: spacing.lg,
-    paddingTop: 0,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   trackList: {
     gap: spacing.sm,
@@ -527,15 +538,24 @@ const styles = StyleSheet.create({
   trackItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.md,
     gap: spacing.md,
   },
   trackItemActive: {
     backgroundColor: colors.surfaceLight,
     borderWidth: 1,
     borderColor: colors.textPrimary,
+  },
+  trackItemDragging: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   trackNumber: {
     width: 32,
@@ -579,6 +599,12 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.textSecondary,
   },
+  dragHandle: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -599,12 +625,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
-  emptySubtitle: {
-    ...typography.bodySmall,
-    color: colors.textTertiary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
   emptyAddButton: {
     width: 56,
     height: 56,
@@ -613,34 +633,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
     marginTop: spacing.xl,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sortButtonText: {
-    ...typography.caption,
-    color: colors.textPrimary,
-    fontWeight: '500',
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,

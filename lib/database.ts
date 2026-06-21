@@ -319,6 +319,16 @@ export const deletePlaylist = async (playlistId: string): Promise<void> => {
   await AsyncStorage.setItem(KEYS.PLAYLISTS, JSON.stringify(filteredPlaylists));
 };
 
+export const reorderPlaylistItems = async (playlistId: string, orderedItemIds: string[]): Promise<void> => {
+  const items = await getAllPlaylistItems();
+  const updatedItems = items.map(item => {
+    if (item.playlistId !== playlistId) return item;
+    const newOrder = orderedItemIds.indexOf(item.id);
+    return newOrder === -1 ? item : { ...item, order: newOrder };
+  });
+  await AsyncStorage.setItem(KEYS.PLAYLIST_ITEMS, JSON.stringify(updatedItems));
+};
+
 export const getPlaylistWithDetails = async (playlistId: string) => {
   const playlist = (await getAllPlaylists()).find((p) => p.id === playlistId);
   if (!playlist) return null;
