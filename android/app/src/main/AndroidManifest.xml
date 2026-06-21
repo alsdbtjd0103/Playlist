@@ -22,6 +22,14 @@
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
+      <!-- dev client / 딥링크용 URI scheme. iOS(Info.plist)의 com.playlist.app 와 일치시켜
+           "shared URI scheme" 경고를 없애고 QR 자동 실행이 동작하게 한다. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="com.playlist.app"/>
+      </intent-filter>
     </activity>
   </application>
 </manifest>

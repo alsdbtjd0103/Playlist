@@ -2,6 +2,7 @@
   "expo": {
     "name": "방구석 플레이리스트",
     "slug": "playlist",
+    "scheme": "com.playlist.app",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
