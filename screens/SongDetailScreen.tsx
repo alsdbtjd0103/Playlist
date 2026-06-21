@@ -25,6 +25,7 @@ import {
 } from '../lib/database';
 import { saveAudioLocally } from '../lib/storage';
 import RecorderModal from '../components/RecorderModal';
+import { AlbumArt } from '../components/AlbumArt';
 import { usePlayer } from '../contexts/PlayerContext';
 import { colors, spacing, borderRadius, typography } from '../lib/theme';
 
@@ -256,9 +257,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* 곡 정보 */}
         <View style={styles.songHeader}>
-          <View style={styles.albumArt}>
-            <Ionicons name="musical-notes" size={48} color={colors.textSecondary} />
-          </View>
+          <AlbumArt uri={song.artworkUrl} size={160} iconSize={48} borderRadius={borderRadius.lg} />
           <Text style={styles.songTitle}>{song.title}</Text>
           {song.artist && (
             <Text style={styles.songArtist}>{song.artist}</Text>
@@ -443,15 +442,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
-  },
-  albumArt: {
-    width: 160,
-    height: 160,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
   },
   songTitle: {
     ...typography.h1,

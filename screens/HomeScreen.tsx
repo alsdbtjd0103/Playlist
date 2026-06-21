@@ -194,7 +194,7 @@ export default function HomeScreen({ navigation }: Props) {
           <Ionicons name="search" size={18} color={colors.textTertiary} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="제목으로 검색"
+            placeholder="제목 또는 아티스트 검색"
             placeholderTextColor={colors.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
