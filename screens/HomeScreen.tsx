@@ -20,6 +20,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList, SongWithVersions } from "../types";
 import { getAllSongs, addSong, getVersionsBySong, deleteSong } from "../lib/database";
+import { matchesSearch } from "../lib/search";
 import { useFocusEffect } from "@react-navigation/native";
 import { colors, spacing, borderRadius, typography } from "../lib/theme";
 import ScreenHeader from "../components/ScreenHeader";
@@ -188,9 +189,7 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   const filteredSongs = songs
-    ? songs.filter((song) =>
-        song.title.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? songs.filter((song) => matchesSearch(song.title, searchQuery))
     : [];
 
   const renderSongCard = ({ item }: { item: SongWithVersions }) => {
