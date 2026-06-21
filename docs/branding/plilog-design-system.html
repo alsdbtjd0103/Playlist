@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>plilog — 디자인 시스템 (인터랙티브)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<style>
+  /* ============ 토큰 ============ */
+  [data-theme="light"]{
+    --bg:#f4ecdd; --surface:#fffdf9; --surface-alt:#faf0e4;
+    --text:#2f2820; --muted:#74664f; --faint:#998a76; --border:#e6dac6;
+    --accent:#c2703d; --accent-strong:#a8542a; --star:#b87a26;
+    --on-accent:#ffffff; --success:#52684d; --danger:#b3402e;
+    --shadow:0 2px 8px rgba(70,45,20,.07); --shadow-lg:0 12px 26px rgba(70,45,20,.14);
+    --ripple:rgba(255,255,255,.45);
+  }
+  [data-theme="dark"]{
+    --bg:#1a1815; --surface:#2b2620; --surface-alt:#2f2a22;
+    --text:#efe7da; --muted:#a89c8a; --faint:#7d7363; --border:#3d362d;
+    --accent:#e2a85b; --accent-strong:#e2a85b; --star:#ecbd74;
+    --on-accent:#241a0c; --success:#8fae84; --danger:#e6705f;
+    --shadow:0 6px 16px rgba(0,0,0,.45); --shadow-lg:0 16px 32px rgba(0,0,0,.55);
+    --ripple:rgba(0,0,0,.25);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{ -webkit-font-smoothing:antialiased; }
+  body{
+    font-family:"Manrope","Pretendard",-apple-system,sans-serif;
+    background:var(--bg); color:var(--text);
+    transition:background-color .4s ease, color .4s ease;
+    padding:0 0 80px;
+  }
+  /* ============ 상단 바 ============ */
+  .topbar{
+    position:sticky; top:0; z-index:50;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 28px; background:color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter:saturate(140%) blur(10px);
+    border-bottom:1px solid var(--border);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .wave{ display:flex; align-items:flex-end; gap:3px; height:26px; }
+  .wave span{ width:3.5px; border-radius:3px; background:var(--accent); transform-origin:bottom; }
+  .playing .wave span, .wave.live span{ animation:wave 1.1s ease-in-out infinite; }
+  .wave span:nth-child(1){height:9px;animation-delay:0s}
+  .wave span:nth-child(2){height:17px;animation-delay:.12s}
+  .wave span:nth-child(3){height:25px;animation-delay:.24s}
+  .wave span:nth-child(4){height:14px;animation-delay:.36s}
+  .wave span:nth-child(5){height:20px;animation-delay:.48s}
+  .wave span:nth-child(6){height:8px;animation-delay:.6s}
+  @keyframes wave{ 0%,100%{transform:scaleY(.35)} 50%{transform:scaleY(1)} }
+  .wordmark{ font-weight:800; font-size:24px; letter-spacing:-.8px; color:var(--accent-strong); }
+  [data-theme="dark"] .wordmark{ color:var(--accent); }
+  .topbar h1{ font-size:14px; font-weight:600; color:var(--muted); }
+
+  /* 테마 토글 스위치 */
+  .toggle{ display:flex; align-items:center; gap:10px; }
+  .toggle small{ font-size:12px; color:var(--muted); font-weight:600; }
+  .switch{ width:58px; height:32px; border-radius:999px; border:1px solid var(--border);
+    background:var(--surface); position:relative; cursor:pointer; transition:.3s; box-shadow:var(--shadow) inset; }
+  .switch::after{ content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%;
+    background:var(--accent); transition:.35s cubic-bezier(.4,1.4,.5,1); box-shadow:0 2px 6px rgba(0,0,0,.25); }
+  [data-theme="dark"] .switch::after{ transform:translateX(26px); }
+
+  .wrap{ max-width:1140px; margin:0 auto; padding:32px 28px; display:grid; grid-template-columns:300px 1fr; gap:40px; align-items:start; }
+  @media (max-width:880px){ .wrap{ grid-template-columns:1fr; } }
+
+  /* ============ 폰 미리보기 ============ */
+  .phone-col{ position:sticky; top:90px; justify-self:center; }
+  @media (max-width:880px){ .phone-col{ position:static; } }
+  .phone{ width:290px; border-radius:40px; padding:10px; background:linear-gradient(160deg,#3a3a3a,#0b0b0b); box-shadow:0 24px 50px rgba(0,0,0,.4); }
+  .screen{ border-radius:30px; overflow:hidden; height:580px; background:var(--bg); color:var(--text); display:flex; flex-direction:column; transition:background-color .4s ease, color .4s ease; }
+  .s-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px 8px; }
+  .s-head .brand .wordmark{ font-size:20px; }
+  .iconbtn{ width:36px; height:36px; border-radius:11px; border:none; cursor:pointer; background:transparent;
+    color:var(--accent-strong); display:flex; align-items:center; justify-content:center; transition:.18s; }
+  [data-theme="dark"] .iconbtn{ color:var(--accent); }
+  .iconbtn:hover{ background:var(--surface); }
+  .iconbtn:active{ transform:scale(.9); }
+  .plus{ position:relative; width:18px; height:18px; }
+  .plus::before,.plus::after{ content:""; position:absolute; background:currentColor; border-radius:2px; }
+  .plus::before{ left:8px; top:1px; width:2px; height:16px; }
+  .plus::after{ top:8px; left:1px; height:2px; width:16px; }
+
+  .s-search{ margin:6px 16px; height:40px; border-radius:13px; background:var(--surface); border:1px solid var(--border);
+    display:flex; align-items:center; gap:9px; padding:0 14px; color:var(--muted); font-size:13px; transition:.2s; }
+  .s-search:focus-within{ border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent); }
+  .s-search input{ border:none; background:transparent; outline:none; color:var(--text); font:inherit; font-size:13px; flex:1; }
+  .s-search input::placeholder{ color:var(--muted); }
+  .mag{ width:13px; height:13px; border-radius:50%; border:2px solid var(--muted); position:relative; flex:0 0 auto; }
+  .mag::after{ content:""; position:absolute; width:6px; height:2px; background:var(--muted); transform:rotate(45deg); right:-4px; bottom:-1px; border-radius:2px; }
+
+  .s-list{ padding:8px 16px; display:flex; flex-direction:column; gap:10px; flex:1; overflow:hidden; }
+  .song{ display:flex; align-items:center; gap:12px; padding:11px; border-radius:16px; background:var(--surface);
+    border:1px solid var(--border); box-shadow:var(--shadow); cursor:pointer; transition:transform .18s ease, box-shadow .18s ease; }
+  .song:hover{ transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+  .song:active{ transform:translateY(0) scale(.99); }
+  .thumb{ width:44px; height:44px; border-radius:13px; flex:0 0 44px; background:color-mix(in srgb,var(--accent) 16%,var(--surface));
+    display:flex; align-items:center; justify-content:center; }
+  .note{ width:16px; height:16px; border-radius:50%; background:var(--accent); position:relative; }
+  .note::before{ content:""; position:absolute; width:3px; height:13px; background:var(--accent); right:1px; bottom:7px; border-radius:2px; }
+  .song .meta{ flex:1; min-width:0; }
+  .song .t1{ font-weight:700; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .song .t2{ font-size:12px; color:var(--muted); margin-top:1px; }
+  .mini-stars{ display:flex; align-items:center; gap:2px; font-size:11px; color:var(--muted); font-weight:700; }
+  .mini-stars .st{ color:var(--star); font-size:12px; }
+
+  /* 미니 플레이어 */
+  .miniplayer{ margin:6px 12px 8px; border-radius:16px; background:var(--surface-alt); border:1px solid var(--border);
+    display:flex; align-items:center; gap:10px; padding:10px 12px; box-shadow:var(--shadow); }
+  .miniplayer .pt{ flex:1; min-width:0; }
+  .miniplayer .pt .a{ font-weight:700; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .miniplayer .pt .b{ font-size:11px; color:var(--muted); }
+  .eq{ display:flex; align-items:flex-end; gap:2px; height:18px; flex:0 0 auto; }
+  .eq span{ width:3px; border-radius:2px; background:var(--accent); height:6px; transform-origin:bottom; }
+  .playing .eq span{ animation:eq 0.9s ease-in-out infinite; }
+  .eq span:nth-child(1){animation-delay:0s} .eq span:nth-child(2){animation-delay:.2s}
+  .eq span:nth-child(3){animation-delay:.4s} .eq span:nth-child(4){animation-delay:.1s}
+  @keyframes eq{ 0%,100%{height:5px} 50%{height:17px} }
+  .playbtn{ width:38px; height:38px; border-radius:50%; border:none; cursor:pointer; flex:0 0 auto;
+    background:var(--accent-strong); color:var(--on-accent); display:flex; align-items:center; justify-content:center; transition:.16s; }
+  .playbtn:hover{ filter:brightness(1.05); transform:scale(1.05); }
+  .playbtn:active{ transform:scale(.92); }
+  .ic-play{ width:0;height:0;border-left:12px solid currentColor;border-top:8px solid transparent;border-bottom:8px solid transparent;margin-left:3px; }
+  .ic-pause{ display:flex; gap:3px; }
+  .ic-pause i{ width:3.5px; height:14px; background:currentColor; border-radius:1px; }
+
+  /* 프로그레스 (파형 + 재생점) */
+  .s-progress{ padding:4px 18px 10px; }
+  .pbar{ height:30px; display:flex; align-items:center; gap:2px; position:relative; cursor:pointer; }
+  .pbar .b{ flex:1; border-radius:2px; background:var(--border); transition:background-color .1s; }
+  .pbar .b.on{ background:var(--accent); }
+  .ptime{ display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:2px; font-variant-numeric:tabular-nums; }
+
+  .s-tabs{ display:flex; border-top:1px solid var(--border); background:var(--surface); margin-top:auto; }
+  .s-tab{ flex:1; text-align:center; padding:10px 0 14px; font-size:11px; font-weight:700; color:var(--muted); cursor:pointer; }
+  .s-tab.on{ color:var(--accent-strong); }
+  [data-theme="dark"] .s-tab.on{ color:var(--accent); }
+  .s-tab .ic{ font-size:17px; display:block; margin-bottom:2px; }
+
+  /* ============ 컴포넌트 랩 ============ */
+  .lab{ display:flex; flex-direction:column; gap:30px; }
+  .sec{ background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:24px; box-shadow:var(--shadow); }
+  .sec > h2{ font-size:13px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .sec > .hint{ font-size:12.5px; color:var(--muted); margin-bottom:18px; }
+  .row{ display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+
+  /* 버튼들 */
+  .btn{ position:relative; overflow:hidden; border:none; cursor:pointer; font:inherit; font-weight:700; font-size:15px;
+    padding:12px 22px; border-radius:14px; transition:transform .12s ease, filter .15s ease, box-shadow .15s; }
+  .btn:active{ transform:scale(.96); }
+  .btn-primary{ background:var(--accent-strong); color:var(--on-accent); box-shadow:var(--shadow); }
+  .btn-primary:hover{ filter:brightness(1.06); box-shadow:var(--shadow-lg); }
+  .btn-secondary{ background:var(--surface); color:var(--text); border:1px solid var(--border); }
+  .btn-secondary:hover{ background:color-mix(in srgb,var(--accent) 10%,var(--surface)); border-color:var(--accent); }
+  .btn-ghost{ background:transparent; color:var(--accent-strong); }
+  [data-theme="dark"] .btn-ghost{ color:var(--accent); }
+  .btn-ghost:hover{ background:color-mix(in srgb,var(--accent) 14%,transparent); }
+  .btn-danger{ background:var(--danger); color:#fff; }
+  .btn-danger:hover{ filter:brightness(1.06); }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .btn[disabled]:active{ transform:none; }
+  .ripple{ position:absolute; border-radius:50%; transform:scale(0); background:var(--ripple); animation:ripple .55s ease-out; pointer-events:none; }
+  @keyframes ripple{ to{ transform:scale(3.2); opacity:0; } }
+
+  /* 별점 인터랙션 */
+  .rate{ display:flex; gap:6px; font-size:34px; line-height:1; cursor:pointer; }
+  .rate .star{ color:var(--border); transition:transform .12s, color .12s; user-select:none; }
+  .rate .star.fill{ color:var(--star); }
+  .rate .star:hover{ transform:scale(1.18); }
+  .rate-val{ font-size:13px; color:var(--muted); margin-top:8px; font-weight:600; }
+
+  /* 칩 */
+  .chip{ padding:7px 14px; border-radius:999px; font-size:13px; font-weight:600; border:1px solid var(--border);
+    background:var(--surface); color:var(--muted); cursor:pointer; transition:.18s; }
+  .chip:hover{ border-color:var(--accent); color:var(--text); }
+  .chip.on{ background:var(--accent-strong); color:var(--on-accent); border-color:transparent; }
+
+  /* 색 토큰 스와치 */
+  .tokens{ display:grid; grid-template-columns:repeat(auto-fill,minmax(116px,1fr)); gap:12px; }
+  .tk{ border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .tk .swatch{ height:54px; }
+  .tk .lab2{ padding:7px 9px; font-size:11px; }
+  .tk .lab2 b{ display:block; font-weight:700; }
+  .tk .lab2 span{ color:var(--muted); font-family:ui-monospace,monospace; font-size:10px; }
+
+  /* 타이포 */
+  .type-row{ display:flex; align-items:baseline; gap:14px; padding:8px 0; border-bottom:1px dashed var(--border); }
+  .type-row:last-child{ border-bottom:none; }
+  .type-row .tag{ font-size:11px; color:var(--muted); width:70px; flex:0 0 70px; font-family:ui-monospace,monospace; }
+
+  /* 녹음 데모 */
+  .rec-demo{ display:flex; align-items:center; gap:18px; }
+  .recbtn{ width:84px; height:84px; border-radius:50%; border:none; cursor:pointer; background:var(--danger);
+    display:flex; align-items:center; justify-content:center; transition:.16s; box-shadow:var(--shadow); }
+  .recbtn:hover{ filter:brightness(1.06); transform:scale(1.04); }
+  .recbtn:active{ transform:scale(.95); }
+  .rec-mic{ width:22px; height:34px; border-radius:11px; background:#fff; position:relative; }
+  .rec-mic::after{ content:""; position:absolute; left:50%; bottom:-12px; transform:translateX(-50%); width:18px; height:9px; border:2px solid #fff; border-top:none; border-radius:0 0 12px 12px; }
+  .recbtn.live .rec-mic{ background:#fff; }
+  .recstate{ display:none; align-items:center; gap:9px; }
+  .recstate.show{ display:flex; }
+  .recdot{ width:12px; height:12px; border-radius:50%; background:var(--danger); animation:pulse 1s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:.35; transform:scale(.82)} }
+  .rectime{ font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .rectag{ font-size:13px; font-weight:700; color:var(--danger); letter-spacing:1px; }
+
+  /* 빈 상태 */
+  .empty{ text-align:center; padding:30px 16px; }
+  .empty .ill{ width:96px; height:96px; border-radius:50%; margin:0 auto 18px; background:color-mix(in srgb,var(--accent) 14%,var(--surface));
+    display:flex; align-items:center; justify-content:center; }
+  .empty .ill .wave{ height:34px; }
+  .empty .ill .wave span{ width:5px; }
+  .empty h3{ font-size:18px; font-weight:800; margin-bottom:6px; }
+  .empty p{ font-size:13.5px; color:var(--muted); margin-bottom:18px; }
+
+  .foot{ max-width:1140px; margin:10px auto 0; padding:0 28px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div class="wave live"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="wordmark">plilog</span>
+      <h1>디자인 시스템 · 코지 웜</h1>
+    </div>
+    <div class="toggle">
+      <small id="themeLabel">라이트 · 웜 샌드</small>
+      <button class="switch" id="themeSwitch" aria-label="테마 전환"></button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- ====== 폰 미리보기 ====== -->
+    <div class="phone-col">
+      <div class="phone">
+        <div class="screen" id="screen">
+          <div class="s-head">
+            <div class="brand">
+              <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              <span class="wordmark">plilog</span>
+            </div>
+            <button class="iconbtn" title="곡 추가"><span class="plus"></span></button>
+          </div>
+          <div class="s-search">
+            <span class="mag"></span>
+            <input placeholder="제목으로 검색" />
+          </div>
+          <div class="s-list">
+            <div class="song"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">밤편지</div><div class="t2">아이유</div></div><div class="mini-stars"><span class="st">★</span>5</div></div>
+            <div class="song"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">좋은 날</div><div class="t2">아이유</div></div><div class="mini-stars"><span class="st">★</span>4</div></div>
+            <div class="song"><div class="thumb"><div class="note"></div></div><div class="meta"><div class="t1">소우주</div><div class="t2">방탄소년단</div></div><div class="mini-stars"><span class="st">★</span>3</div></div>
+          </div>
+          <div class="s-progress">
+            <div class="pbar" id="pbar"></div>
+            <div class="ptime"><span id="cur">0:41</span><span>3:28</span></div>
+          </div>
+          <div class="miniplayer">
+            <div class="thumb" style="width:36px;height:36px;flex:0 0 36px"><div class="note"></div></div>
+            <div class="pt"><div class="a">밤편지</div><div class="b" id="nowsub">재생 중</div></div>
+            <div class="eq"><span></span><span></span><span></span><span></span></div>
+            <button class="playbtn" id="playbtn" aria-label="재생/일시정지"><span class="ic-play"></span></button>
+          </div>
+          <div class="s-tabs">
+            <div class="s-tab on"><span class="ic">♪</span>노래</div>
+            <div class="s-tab"><span class="ic">▤</span>플레이리스트</div>
+          </div>
+        </div>
+      </div>
+      <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px;max-width:290px">
+        ▶ 버튼을 눌러보세요 — 파형·이퀄라이저·프로그레스가 함께 움직입니다. 상단 스위치로 라이트/다크 전환.
+      </p>
+    </div>
+
+    <!-- ====== 컴포넌트 랩 ====== -->
+    <div class="lab">
+
+      <div class="sec">
+        <h2>Color Tokens</h2>
+        <p class="hint">현재 테마의 시맨틱 토큰. 스위치를 누르면 모든 값이 라이트↔다크로 바뀝니다.</p>
+        <div class="tokens" id="tokens"></div>
+      </div>
+
+      <div class="sec">
+        <h2>Buttons</h2>
+        <p class="hint">호버 시 밝아지고, 누르면 살짝 작아지며 잉크 리플이 퍼집니다.</p>
+        <div class="row">
+          <button class="btn btn-primary">녹음 저장</button>
+          <button class="btn btn-secondary">취소</button>
+          <button class="btn btn-ghost">더보기</button>
+          <button class="btn btn-danger">삭제</button>
+          <button class="btn btn-primary" disabled>비활성</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Star Rating</h2>
+        <p class="hint">별 위에 마우스를 올리고 클릭해 점수를 매겨보세요.</p>
+        <div class="rate" id="rate">
+          <span class="star" data-v="1">★</span><span class="star" data-v="2">★</span>
+          <span class="star" data-v="3">★</span><span class="star" data-v="4">★</span><span class="star" data-v="5">★</span>
+        </div>
+        <div class="rate-val" id="rateVal">3점 — 괜찮아요</div>
+      </div>
+
+      <div class="sec">
+        <h2>Chips</h2>
+        <p class="hint">선택형 태그. 활성 칩은 강조 색(accentStrong)으로 채워집니다.</p>
+        <div class="row" id="chips">
+          <button class="chip on">전체</button>
+          <button class="chip">즐겨찾기</button>
+          <button class="chip">최근 녹음</button>
+          <button class="chip">미분류</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Recording</h2>
+        <p class="hint">녹음 버튼을 누르면 REC 상태로 전환되고 점이 박동합니다. 녹음은 브랜드 색이 아닌 시맨틱 danger 색.</p>
+        <div class="rec-demo">
+          <button class="recbtn" id="recbtn" aria-label="녹음"><span class="rec-mic"></span></button>
+          <div class="recstate" id="recstate">
+            <span class="recdot"></span><span class="rectag">REC</span>
+            <span class="rectime" id="rectime">00:00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Typography</h2>
+        <p class="hint">Manrope(라틴) + Pretendard(한글). 모바일 위계.</p>
+        <div class="type-row"><span class="tag">Display</span><span style="font-size:28px;font-weight:800">나의 연습실</span></div>
+        <div class="type-row"><span class="tag">H1 24/700</span><span style="font-size:24px;font-weight:700">오늘의 녹음</span></div>
+        <div class="type-row"><span class="tag">Title 16/700</span><span style="font-size:16px;font-weight:700">밤편지 — 아이유</span></div>
+        <div class="type-row"><span class="tag">Body 15/500</span><span style="font-size:15px;font-weight:500">방에서 혼자, 내 목소리를 모으다.</span></div>
+        <div class="type-row"><span class="tag">Caption 13</span><span style="font-size:13px;color:var(--muted)">2026년 6월 21일 · 0:41</span></div>
+      </div>
+
+      <div class="sec">
+        <h2>Empty State</h2>
+        <p class="hint">따뜻한 카피 + 명확한 다음 행동. 일러스트는 선택.</p>
+        <div class="empty">
+          <div class="ill"><div class="wave live"><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+          <h3>아직 녹음한 곡이 없어요</h3>
+          <p>첫 곡을 추가하고, 오늘의 목소리를 기록해볼까요?</p>
+          <button class="btn btn-primary">곡 추가하기</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <p class="foot">plilog 디자인 시스템 v1 · 라이트(웜 샌드) + 다크(웜 차콜) · 전 토큰 WCAG 2.1 AA 검증. 자세한 근거는 PLILOG_DESIGN_SYSTEM.md.</p>
+
+<script>
+  // ===== 테마 토글 =====
+  const root = document.documentElement;
+  const label = document.getElementById('themeLabel');
+  document.getElementById('themeSwitch').addEventListener('click', ()=>{
+    const dark = root.getAttribute('data-theme') === 'dark';
+    root.setAttribute('data-theme', dark ? 'light' : 'dark');
+    label.textContent = dark ? '라이트 · 웜 샌드' : '다크 · 웜 차콜';
+    renderTokens();
+  });
+
+  // ===== 색 토큰 렌더 =====
+  const TOKENS = ['bg','surface','surfaceAlt','text','textMuted','border','accent','accentStrong','star','onAccent','success','danger'];
+  const VARMAP = {bg:'--bg',surface:'--surface',surfaceAlt:'--surface-alt',text:'--text',textMuted:'--muted',border:'--border',accent:'--accent',accentStrong:'--accent-strong',star:'--star',onAccent:'--on-accent',success:'--success',danger:'--danger'};
+  function renderTokens(){
+    const cs = getComputedStyle(root.querySelector ? document.body : document.body);
+    const host = document.getElementById('tokens');
+    host.innerHTML = '';
+    TOKENS.forEach(name=>{
+      const val = getComputedStyle(document.body).getPropertyValue(VARMAP[name]).trim();
+      const el = document.createElement('div');
+      el.className = 'tk';
+      el.innerHTML = `<div class="swatch" style="background:${val}"></div><div class="lab2"><b>${name}</b><span>${val}</span></div>`;
+      host.appendChild(el);
+    });
+  }
+  renderTokens();
+
+  // ===== 리플 효과 =====
+  document.querySelectorAll('.btn').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      if(btn.disabled) return;
+      const r = document.createElement('span');
+      r.className = 'ripple';
+      const rect = btn.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      r.style.width = r.style.height = size + 'px';
+      r.style.left = (e.clientX - rect.left - size/2) + 'px';
+      r.style.top = (e.clientY - rect.top - size/2) + 'px';
+      btn.appendChild(r);
+      setTimeout(()=>r.remove(), 560);
+    });
+  });
+
+  // ===== 별점 =====
+  const rate = document.getElementById('rate');
+  const rateVal = document.getElementById('rateVal');
+  const LABELS = {1:'별로예요',2:'그저 그래요',3:'괜찮아요',4:'좋아요',5:'최고예요'};
+  let rating = 3;
+  function paint(n){ rate.querySelectorAll('.star').forEach(s=> s.classList.toggle('fill', +s.dataset.v <= n)); }
+  paint(rating);
+  rate.querySelectorAll('.star').forEach(s=>{
+    s.addEventListener('mouseenter', ()=> paint(+s.dataset.v));
+    s.addEventListener('click', ()=>{ rating = +s.dataset.v; rateVal.textContent = `${rating}점 — ${LABELS[rating]}`; paint(rating); });
+  });
+  rate.addEventListener('mouseleave', ()=> paint(rating));
+
+  // ===== 칩 =====
+  document.getElementById('chips').addEventListener('click', e=>{
+    if(!e.target.classList.contains('chip')) return;
+    document.querySelectorAll('#chips .chip').forEach(c=>c.classList.remove('on'));
+    e.target.classList.add('on');
+  });
+
+  // ===== 미니플레이어 재생 + 프로그레스 =====
+  const screen = document.getElementById('screen');
+  const playbtn = document.getElementById('playbtn');
+  const pbar = document.getElementById('pbar');
+  const cur = document.getElementById('cur');
+  const nowsub = document.getElementById('nowsub');
+  const BARS = 38, TOTAL = 208; // 3:28
+  let pos = 41, playing = false, timer = null;
+  for(let i=0;i<BARS;i++){ const b=document.createElement('div'); b.className='b'; b.style.height=(6+Math.abs(Math.sin(i*0.6))*22)+'px'; pbar.appendChild(b); }
+  const bars = pbar.querySelectorAll('.b');
+  function fmt(s){ return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); }
+  function drawProgress(){
+    const ratio = pos/TOTAL;
+    bars.forEach((b,i)=> b.classList.toggle('on', i/BARS <= ratio));
+    cur.textContent = fmt(pos);
+  }
+  drawProgress();
+  function setPlaying(p){
+    playing = p;
+    screen.classList.toggle('playing', p);
+    playbtn.innerHTML = p ? '<span class="ic-pause"><i></i><i></i></span>' : '<span class="ic-play"></span>';
+    nowsub.textContent = p ? '재생 중' : '일시정지';
+    if(p){ timer = setInterval(()=>{ pos = (pos+1) % TOTAL; drawProgress(); }, 250); }
+    else { clearInterval(timer); }
+  }
+  playbtn.addEventListener('click', ()=> setPlaying(!playing));
+  pbar.addEventListener('click', e=>{ const rect=pbar.getBoundingClientRect(); pos = Math.round((e.clientX-rect.left)/rect.width*TOTAL); drawProgress(); });
+
+  // ===== 녹음 데모 =====
+  const recbtn = document.getElementById('recbtn');
+  const recstate = document.getElementById('recstate');
+  const rectime = document.getElementById('rectime');
+  let recording=false, recT=null, recS=0;
+  recbtn.addEventListener('click', ()=>{
+    recording = !recording;
+    recbtn.classList.toggle('live', recording);
+    recstate.classList.toggle('show', recording);
+    if(recording){ recS=0; rectime.textContent='00:00'; recT=setInterval(()=>{ recS++; rectime.textContent = String(Math.floor(recS/60)).padStart(2,'0')+':'+String(recS%60).padStart(2,'0'); },1000); }
+    else { clearInterval(recT); }
+  });
+</script>
+</body>
+</html>

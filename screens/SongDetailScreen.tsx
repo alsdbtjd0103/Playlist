@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,8 +25,11 @@ import {
 } from '../lib/database';
 import { saveAudioLocally } from '../lib/storage';
 import RecorderModal from '../components/RecorderModal';
+import { AlbumArt } from '../components/AlbumArt';
 import { usePlayer } from '../contexts/PlayerContext';
-import { colors, spacing, borderRadius, typography } from '../lib/theme';
+import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
+import { useTheme } from '../contexts/ThemeContext';
+import Waveform from '../components/Waveform';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SongDetail'>;
 
@@ -42,6 +45,8 @@ const VersionItem = ({
   onOpenMenu: (x: number, y: number, version: Version) => void;
 }) => {
   const buttonRef = React.useRef<View>(null);
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const handlePress = () => {
     buttonRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
@@ -63,7 +68,7 @@ const VersionItem = ({
             </Text>
             {song.defaultVersionId === version.id && (
               <View style={styles.defaultBadge}>
-                <Ionicons name="checkmark-circle" size={12} color={colors.primary} />
+                <Ionicons name="checkmark-circle" size={12} color={colors.accentStrong} />
                 <Text style={styles.defaultBadgeText}>대표</Text>
               </View>
             )}
@@ -74,7 +79,7 @@ const VersionItem = ({
                 key={star}
                 name={star <= version.rating ? 'star' : 'star-outline'}
                 size={14}
-                color={colors.warning}
+                color={colors.star}
               />
             ))}
           </View>
@@ -90,7 +95,7 @@ const VersionItem = ({
           style={styles.moreButton}
           onPress={handlePress}
         >
-          <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
+          <Ionicons name="ellipsis-vertical" size={20} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
     </View>
@@ -98,6 +103,9 @@ const VersionItem = ({
 };
 
 export default function SongDetailScreen({ route, navigation }: Props) {
+  const { colors, scheme } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const wordColor = scheme === 'dark' ? colors.accent : colors.accentStrong;
   const { songId } = route.params;
   const [song, setSong] = useState<SongWithVersions | null>(null);
   const [recorderVisible, setRecorderVisible] = useState(false);
@@ -224,10 +232,10 @@ export default function SongDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string) => {
+  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number) => {
     try {
       const { fileName, localUri } = await saveAudioLocally(songId, audioUri);
-      await addVersion(songId, fileName, localUri, rating, undefined, memo);
+      await addVersion(songId, fileName, localUri, rating, duration, memo, { waveform });
       await fetchSong();
     } catch (error) {
       console.error('녹음 저장 실패:', error);
@@ -238,7 +246,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   if (!song) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accentStrong} />
       </View>
     );
   }
@@ -248,24 +256,22 @@ export default function SongDetailScreen({ route, navigation }: Props) {
       {/* 헤더 */}
       <View style={styles.header}>
         <View style={styles.logo}>
-          <Ionicons name="musical-notes" size={20} color={colors.primary} />
-          <Text style={styles.logoText}>Playlist</Text>
+          <Waveform size={20} />
+          <Text style={[styles.logoText, { color: wordColor }]}>plilog</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* 곡 정보 */}
         <View style={styles.songHeader}>
-          <View style={styles.albumArt}>
-            <Ionicons name="musical-notes" size={48} color={colors.textSecondary} />
-          </View>
+          <AlbumArt uri={song.artworkUrl} size={160} iconSize={48} borderRadius={borderRadius.lg} />
           <Text style={styles.songTitle}>{song.title}</Text>
           {song.artist && (
             <Text style={styles.songArtist}>{song.artist}</Text>
           )}
           {song.defaultVersion && (
             <View style={styles.ratingDisplay}>
-              <Ionicons name="star" size={16} color={colors.warning} />
+              <Ionicons name="star" size={16} color={colors.star} />
               <Text style={styles.ratingDisplayText}>{song.defaultVersion.rating}</Text>
             </View>
           )}
@@ -279,7 +285,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
             activeOpacity={0.8}
           >
             <View style={styles.recordButtonInner}>
-              <Ionicons name="mic" size={24} color={colors.textPrimary} />
+              <Ionicons name="mic" size={24} color={colors.onAccent} />
             </View>
           </TouchableOpacity>
         </View>
@@ -329,7 +335,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>평점 수정</Text>
               <TouchableOpacity onPress={() => setRatingModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
             <View style={styles.ratingContainer}>
@@ -338,7 +344,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
                   <Ionicons
                     name={star <= newRating ? 'star' : 'star-outline'}
                     size={40}
-                    color={colors.warning}
+                    color={colors.star}
                   />
                 </TouchableOpacity>
               ))}
@@ -379,7 +385,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
                   style={styles.menuItem}
                   onPress={() => menuState.version && handleSetDefaultVersion(menuState.version.id)}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={20} color={colors.textPrimary} />
+                  <Ionicons name="checkmark-circle-outline" size={20} color={colors.text} />
                   <Text style={styles.menuItemText}>대표 버전 설정</Text>
                 </TouchableOpacity>
               )}
@@ -387,15 +393,28 @@ export default function SongDetailScreen({ route, navigation }: Props) {
                 style={styles.menuItem}
                 onPress={handleEditRating}
               >
-                <Ionicons name="star-outline" size={20} color={colors.warning} />
+                <Ionicons name="star-outline" size={20} color={colors.star} />
                 <Text style={styles.menuItemText}>평점 수정</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  if (menuState.version) {
+                    const vId = menuState.version.id;
+                    closeMenu();
+                    navigation.navigate('TrimEditor', { versionId: vId });
+                  }
+                }}
+              >
+                <Ionicons name="cut-outline" size={20} color={colors.text} />
+                <Text style={styles.menuItemText}>구간 편집</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => menuState.version && handleDeleteVersion(menuState.version.id)}
               >
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
-                <Text style={[styles.menuItemText, { color: colors.error }]}>삭제</Text>
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                <Text style={[styles.menuItemText, { color: colors.danger }]}>삭제</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -405,21 +424,21 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   loadingText: {
     marginTop: spacing.md,
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   scrollContent: {
     paddingBottom: spacing.xxl,
@@ -434,34 +453,25 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   logoText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
+    fontFamily: fontFamily.wordmark,
+    fontSize: 20,
+    letterSpacing: -0.8,
+    color: colors.text,
   },
   songHeader: {
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },
-  albumArt: {
-    width: 160,
-    height: 160,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
   songTitle: {
     ...typography.h1,
-    color: colors.textPrimary,
+    color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   songArtist: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.lg,
   },
   ratingDisplay: {
@@ -471,7 +481,7 @@ const styles = StyleSheet.create({
   },
   ratingDisplayText: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   actionButtons: {
     paddingHorizontal: spacing.lg,
@@ -491,7 +501,7 @@ const styles = StyleSheet.create({
   },
   recordButtonText: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   versionsSection: {
     paddingHorizontal: spacing.lg,
@@ -504,11 +514,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.h3,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   sectionCount: {
     ...typography.bodySmall,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
@@ -536,7 +546,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -548,20 +558,20 @@ const styles = StyleSheet.create({
   versionDate: {
     ...typography.body,
     fontWeight: '500',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   defaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
   defaultBadgeText: {
     ...typography.caption,
-    color: colors.textPrimary,
+    color: colors.text,
     fontWeight: '600',
   },
   ratingStars: {
@@ -570,7 +580,7 @@ const styles = StyleSheet.create({
   },
   versionMemo: {
     ...typography.bodySmall,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     marginTop: spacing.xs,
   },
   versionActions: {
@@ -582,7 +592,7 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: borderRadius.full,
   },
   deleteButton: {
@@ -592,7 +602,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   disabledButtonText: {
-    color: colors.textTertiary,
+    color: colors.textMuted,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -610,12 +620,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...typography.h3,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
     ...typography.bodySmall,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     marginBottom: spacing.xl,
     textAlign: 'center',
   },
@@ -624,13 +634,13 @@ const styles = StyleSheet.create({
     height: 64,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.record,
+    backgroundColor: colors.danger,
     borderRadius: borderRadius.full,
   },
   emptyButtonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   moreButton: {
     padding: spacing.sm,
@@ -666,7 +676,7 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     ...typography.bodySmall,
-    color: colors.textPrimary,
+    color: colors.text,
     fontWeight: '500',
   },
   ratingContainer: {
@@ -694,7 +704,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...typography.h3,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -708,18 +718,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
   },
   cancelButtonText: {
-    color: colors.textPrimary,
+    color: colors.text,
     fontSize: typography.body.fontSize,
     fontWeight: '600',
   },
   confirmButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
   },
   confirmButtonText: {
-    color: colors.background,
+    color: colors.bg,
     fontSize: typography.body.fontSize,
     fontWeight: '600',
   },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,15 +13,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRecording } from '../hooks/useRecording';
 import { usePlayer } from '../contexts/PlayerContext';
-import { colors, spacing, borderRadius, typography } from '../lib/theme';
+import { useTheme } from '../contexts/ThemeContext';
+import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 
 interface RecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (audioUri: string, rating: number, memo?: string) => Promise<void>;
+  onSave: (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number) => Promise<void>;
 }
 
 export default function RecorderModal({ visible, onClose, onSave }: RecorderModalProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const {
     isRecording,
     isPaused,
@@ -29,6 +32,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
     audioUri,
     permissionStatus,
     checkingPermission,
+    waveform,
     startRecording,
     pauseRecording,
     resumeRecording,
@@ -62,7 +66,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
 
     setSaving(true);
     try {
-      await onSave(audioUri, rating, memo.trim() || undefined);
+      await onSave(audioUri, rating, memo.trim() || undefined, waveform, recordingTime);
       handleClose();
     } catch (error) {
       console.error('저장 실패:', error);
@@ -98,7 +102,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>녹음</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
+              <Ionicons name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -108,7 +112,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
             {permissionStatus === 'denied' && !audioUri && (
               <View style={styles.permissionDeniedContainer}>
                 <View style={styles.permissionIconContainer}>
-                  <Ionicons name="mic-off" size={48} color={colors.error} />
+                  <Ionicons name="mic-off" size={48} color={colors.danger} />
                 </View>
                 <Text style={styles.permissionDeniedText}>
                   마이크 권한이 필요합니다
@@ -120,7 +124,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                   style={styles.settingsButton}
                   onPress={() => Linking.openSettings()}
                 >
-                  <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
+                  <Ionicons name="settings-outline" size={20} color={colors.text} />
                   <Text style={styles.settingsButtonText}>설정으로 이동</Text>
                 </TouchableOpacity>
               </View>
@@ -136,9 +140,9 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                   activeOpacity={0.8}
                 >
                   {checkingPermission ? (
-                    <ActivityIndicator color={colors.textPrimary} size="large" />
+                    <ActivityIndicator color={colors.text} size="large" />
                   ) : (
-                    <Ionicons name="mic" size={48} color={colors.background} />
+                    <Ionicons name="mic" size={48} color={colors.onAccent} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -150,7 +154,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                 <View style={styles.recordingIndicator}>
                   {isPaused ? (
                     <>
-                      <Ionicons name="pause" size={16} color={colors.textSecondary} />
+                      <Ionicons name="pause" size={16} color={colors.textMuted} />
                       <Text style={styles.pausedText}>일시정지</Text>
                     </>
                   ) : (
@@ -172,7 +176,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                     <Ionicons
                       name={isPaused ? 'play' : 'pause'}
                       size={28}
-                      color={colors.textPrimary}
+                      color={colors.text}
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -180,7 +184,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                     onPress={stopRecording}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="stop" size={28} color={colors.textPrimary} />
+                    <Ionicons name="stop" size={28} color={colors.onAccent} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -204,7 +208,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                         <Ionicons
                           name={star <= rating ? 'star' : 'star-outline'}
                           size={36}
-                          color={colors.warning}
+                          color={colors.star}
                         />
                       </TouchableOpacity>
                     ))}
@@ -216,7 +220,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                     <TextInput
                       style={styles.memoInput}
                       placeholder="이 녹음에 대한 메모를 입력하세요"
-                      placeholderTextColor={colors.textTertiary}
+                      placeholderTextColor={colors.textMuted}
                       value={memo}
                       onChangeText={setMemo}
                       multiline
@@ -246,10 +250,10 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                   disabled={saving}
                 >
                   {saving ? (
-                    <ActivityIndicator color={colors.background} size="small" />
+                    <ActivityIndicator color={colors.onAccent} size="small" />
                   ) : (
                     <>
-                      <Ionicons name="checkmark" size={20} color={colors.background} />
+                      <Ionicons name="checkmark" size={20} color={colors.onAccent} />
                       <Text style={styles.confirmButtonText}>저장</Text>
                     </>
                   )}
@@ -270,7 +274,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -291,13 +295,13 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...typography.h3,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -331,24 +335,25 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.error,
+    backgroundColor: colors.record,
   },
   recordingText: {
     ...typography.h3,
-    color: colors.error,
+    color: colors.record,
   },
   pausedText: {
     ...typography.h3,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   recordingTime: {
+    fontFamily: fontFamily.bold,
     fontSize: 48,
     fontWeight: 'bold',
-    color: colors.textPrimary,
+    color: colors.text,
     fontVariant: ['tabular-nums'],
   },
   recordingTimePaused: {
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   recordingControls: {
     flexDirection: 'row',
@@ -369,7 +374,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.error,
+    backgroundColor: colors.record,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -396,7 +401,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   memoInputWrapper: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -404,7 +409,7 @@ const styles = StyleSheet.create({
   memoInput: {
     padding: spacing.md,
     ...typography.bodySmall,
-    color: colors.textPrimary,
+    color: colors.text,
     minHeight: 80,
     textAlignVertical: 'top',
   },
@@ -423,28 +428,28 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   cancelButton: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
   },
   cancelButtonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   confirmButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
   },
   confirmButtonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.background,
+    color: colors.onAccent,
   },
   closeOnlyButton: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
   },
   closeOnlyButtonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   permissionDeniedContainer: {
     alignItems: 'center',
@@ -462,12 +467,12 @@ const styles = StyleSheet.create({
   },
   permissionDeniedText: {
     ...typography.h3,
-    color: colors.textPrimary,
+    color: colors.text,
     textAlign: 'center',
   },
   permissionDeniedDescription: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -478,12 +483,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
     borderRadius: borderRadius.md,
   },
   settingsButtonText: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.background,
+    color: colors.onAccent,
   },
 });

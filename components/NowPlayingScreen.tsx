@@ -13,7 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayer } from '../contexts/PlayerContext';
 import AudioPlayer from './AudioPlayer';
-import { colors, spacing, borderRadius, typography } from '../lib/theme';
+import { useTheme } from '../contexts/ThemeContext';
+import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
@@ -30,6 +31,8 @@ export default function NowPlayingScreen() {
     setRepeatMode,
     handleTrackEnd,
   } = usePlayer();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const insets = useSafeAreaInsets();
   const [shuffleMode, setShuffleMode] = useState(false);
@@ -126,7 +129,7 @@ export default function NowPlayingScreen() {
       {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerButton} onPress={minimizePlayer}>
-          <Ionicons name="chevron-down" size={28} color="#e5e5e5" />
+          <Ionicons name="chevron-down" size={28} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerButton} />
       </View>
@@ -134,7 +137,7 @@ export default function NowPlayingScreen() {
       {/* 앨범 아트 */}
       <View style={styles.albumArtContainer}>
         <View style={[styles.albumArt, { width: ALBUM_ART_SIZE, height: ALBUM_ART_SIZE }]}>
-          <Ionicons name="musical-notes" size={Math.min(120, ALBUM_ART_SIZE * 0.3)} color="#404040" />
+          <Ionicons name="musical-notes" size={Math.min(120, ALBUM_ART_SIZE * 0.3)} color={colors.accent} />
         </View>
       </View>
 
@@ -145,7 +148,7 @@ export default function NowPlayingScreen() {
           <Text style={styles.songArtist}>{currentTrack.song.artist}</Text>
         )}
         <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={16} color="#fbbf24" />
+          <Ionicons name="star" size={16} color={colors.star} />
           <Text style={styles.ratingText}>{currentTrack.version.rating}</Text>
         </View>
         {isPlaylistMode && playlistState && (
@@ -172,7 +175,7 @@ export default function NowPlayingScreen() {
       {/* 메모 */}
       {currentTrack.version.memo && (
         <View style={styles.memoContainer}>
-          <Ionicons name="document-text-outline" size={16} color="#808080" />
+          <Ionicons name="document-text-outline" size={16} color={colors.textMuted} />
           <Text style={styles.memoText}>{currentTrack.version.memo}</Text>
         </View>
       )}
@@ -180,14 +183,14 @@ export default function NowPlayingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   container: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: colors.bg,
     zIndex: 1000,
   },
   handleArea: {
@@ -198,7 +201,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#404040',
+    backgroundColor: colors.border,
   },
   header: {
     flexDirection: 'row',
@@ -216,7 +219,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.body,
     fontWeight: '600',
-    color: '#b3b3b3',
+    color: colors.textMuted,
   },
   albumArtContainer: {
     alignItems: 'center',
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
   },
   albumArt: {
     borderRadius: 20,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -236,14 +239,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   songTitle: {
+    fontFamily: typography.h1.fontFamily,
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: colors.text,
     textAlign: 'center',
   },
   songArtist: {
+    fontFamily: fontFamily.regular,
     fontSize: 16,
-    color: '#b3b3b3',
+    color: colors.textMuted,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -252,12 +257,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   ratingText: {
+    fontFamily: fontFamily.regular,
     fontSize: 14,
-    color: '#b3b3b3',
+    color: colors.textMuted,
   },
   trackIndicator: {
+    fontFamily: fontFamily.regular,
     fontSize: 12,
-    color: '#808080',
+    color: colors.textMuted,
     marginTop: spacing.xs,
   },
   playerContainer: {
@@ -272,13 +279,14 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.xl,
     marginBottom: spacing.md,
     padding: spacing.md,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: borderRadius.md,
   },
   memoText: {
     flex: 1,
+    fontFamily: fontFamily.regular,
     fontSize: 14,
-    color: '#b3b3b3',
+    color: colors.textMuted,
     lineHeight: 20,
   },
 });

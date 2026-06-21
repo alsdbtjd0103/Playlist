@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -29,7 +29,9 @@ import {
   reorderPlaylistItems,
 } from '../lib/database';
 import { usePlayer } from '../contexts/PlayerContext';
-import { colors, spacing, borderRadius, typography } from '../lib/theme';
+import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
+import { useTheme } from '../contexts/ThemeContext';
+import Waveform from '../components/Waveform';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaylistDetail'>;
 
@@ -45,6 +47,9 @@ interface PlaylistItem {
 type SortOrder = null | 'newest' | 'oldest';
 
 export default function PlaylistDetailScreen({ route }: Props) {
+  const { colors, scheme } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const wordColor = scheme === 'dark' ? colors.accent : colors.accentStrong;
   const { playlistId } = route.params;
   const [playlist, setPlaylistData] = useState<any>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -208,7 +213,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
         >
           <View style={[styles.trackNumber, isPlaying && styles.trackNumberActive]}>
             {isPlaying ? (
-              <Ionicons name="musical-note" size={14} color={colors.textPrimary} />
+              <Ionicons name="musical-note" size={14} color={colors.text} />
             ) : (
               <Text style={styles.trackNumberText}>{index + 1}</Text>
             )}
@@ -222,7 +227,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
             )}
           </View>
           <View style={styles.trackRating}>
-            <Ionicons name="star" size={14} color={colors.warning} />
+            <Ionicons name="star" size={14} color={colors.star} />
             <Text style={styles.ratingText}>{item.version.rating}</Text>
           </View>
           {isDragEnabled && (
@@ -231,7 +236,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
               style={styles.dragHandle}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="reorder-three" size={22} color={colors.textTertiary} />
+              <Ionicons name="reorder-three" size={22} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </TouchableOpacity>
@@ -242,7 +247,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
   if (!playlist) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accentStrong} />
       </View>
     );
   }
@@ -251,8 +256,8 @@ export default function PlaylistDetailScreen({ route }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.logo}>
-          <Ionicons name="musical-notes" size={20} color={colors.primary} />
-          <Text style={styles.logoText}>Playlist</Text>
+          <Waveform size={20} />
+          <Text style={[styles.logoText, { color: wordColor }]}>plilog</Text>
         </View>
         <View style={styles.headerActions}>
           {playlist.items.length > 0 && (
@@ -263,14 +268,14 @@ export default function PlaylistDetailScreen({ route }: Props) {
               <Ionicons
                 name={sortOrder !== null ? 'swap-vertical' : 'reorder-four-outline'}
                 size={16}
-                color={colors.textPrimary}
+                color={colors.text}
               />
               <Text style={styles.sortButtonText}>{sortLabel}</Text>
             </TouchableOpacity>
           )}
           {!playlist.isDefault && (
             <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
-              <Ionicons name="add" size={24} color={colors.textPrimary} />
+              <Ionicons name="add" size={24} color={colors.text} />
             </TouchableOpacity>
           )}
         </View>
@@ -279,12 +284,12 @@ export default function PlaylistDetailScreen({ route }: Props) {
       {playlist.items.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconContainer}>
-            <Ionicons name="disc-outline" size={64} color={colors.textTertiary} />
+            <Ionicons name="disc-outline" size={64} color={colors.textMuted} />
           </View>
           <Text style={styles.emptyTitle}>플레이리스트가 비어있습니다</Text>
           {!playlist.isDefault && (
             <TouchableOpacity style={styles.emptyAddButton} onPress={handleOpenAddModal}>
-              <Ionicons name="add" size={24} color={colors.background} />
+              <Ionicons name="add" size={24} color={colors.bg} />
             </TouchableOpacity>
           )}
         </View>
@@ -292,13 +297,13 @@ export default function PlaylistDetailScreen({ route }: Props) {
         <NestableScrollContainer style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.playlistHeader}>
             <View style={styles.playlistCover}>
-              <Ionicons name="musical-notes" size={48} color={colors.textSecondary} />
+              <Ionicons name="musical-notes" size={48} color={colors.textMuted} />
             </View>
             <View style={styles.playlistInfo}>
               <Text style={styles.playlistTitle}>{playlist.name}</Text>
               <Text style={styles.playlistCount}>{playlist.items.length}곡</Text>
               <TouchableOpacity style={styles.playAllButton} onPress={() => handleTrackPress(0)}>
-                <Ionicons name="play" size={20} color={colors.background} />
+                <Ionicons name="play" size={20} color={colors.bg} />
                 <Text style={styles.playAllText}>전체 재생</Text>
               </TouchableOpacity>
             </View>
@@ -328,17 +333,17 @@ export default function PlaylistDetailScreen({ route }: Props) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>곡 추가</Text>
               <TouchableOpacity onPress={() => setAddModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             {loading ? (
               <View style={styles.modalLoading}>
-                <ActivityIndicator size="large" color={colors.primary} />
+                <ActivityIndicator size="large" color={colors.accentStrong} />
               </View>
             ) : availableSongs.length === 0 ? (
               <View style={styles.modalLoading}>
-                <Ionicons name="musical-notes-outline" size={64} color={colors.textTertiary} />
+                <Ionicons name="musical-notes-outline" size={64} color={colors.textMuted} />
                 <Text style={styles.emptyModalText}>추가할 수 있는 곡이 없습니다</Text>
                 <Text style={styles.emptyModalSubtext}>먼저 곡을 녹음해보세요!</Text>
               </View>
@@ -370,7 +375,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
                           >
                             <View style={styles.versionInfo}>
                               <View style={styles.versionMeta}>
-                                <Ionicons name="star" size={12} color={colors.warning} />
+                                <Ionicons name="star" size={12} color={colors.star} />
                                 <Text style={styles.versionRating}>{version.rating}</Text>
                                 <Text style={styles.versionDate}>
                                   {new Date(version.recordedAt).toLocaleDateString('ko-KR', {
@@ -387,7 +392,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
                             </View>
                             <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
                               {isSelected && (
-                                <Ionicons name="checkmark" size={16} color={colors.background} />
+                                <Ionicons name="checkmark" size={16} color={colors.bg} />
                               )}
                               {isAlreadyInPlaylist && !isSelected && (
                                 <Text style={styles.checkboxDisabledText}>추가됨</Text>
@@ -422,16 +427,16 @@ export default function PlaylistDetailScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: 'row',
@@ -446,10 +451,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   logoText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    letterSpacing: -0.5,
+    fontFamily: fontFamily.wordmark,
+    fontSize: 20,
+    color: colors.text,
+    letterSpacing: -0.8,
   },
   headerActions: {
     flexDirection: 'row',
@@ -468,12 +473,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   sortButtonActive: {
-    backgroundColor: colors.surfaceLight,
-    borderColor: colors.textSecondary,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.textMuted,
   },
   sortButtonText: {
     ...typography.caption,
-    color: colors.textPrimary,
+    color: colors.text,
     fontWeight: '500',
   },
   addButton: {
@@ -506,17 +511,17 @@ const styles = StyleSheet.create({
   },
   playlistTitle: {
     ...typography.h2,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   playlistCount: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   playAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
@@ -526,7 +531,7 @@ const styles = StyleSheet.create({
   playAllText: {
     ...typography.bodySmall,
     fontWeight: '600',
-    color: colors.background,
+    color: colors.bg,
   },
   trackListSection: {
     paddingHorizontal: spacing.lg,
@@ -546,9 +551,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   trackItemActive: {
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: colors.textPrimary,
+    borderColor: colors.text,
   },
   trackItemDragging: {
     shadowColor: '#000',
@@ -561,17 +566,17 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   trackNumberActive: {
-    backgroundColor: colors.surfaceLighter,
+    backgroundColor: colors.surfaceAlt,
   },
   trackNumberText: {
     ...typography.bodySmall,
     fontWeight: '600',
-    color: colors.textTertiary,
+    color: colors.textMuted,
   },
   trackInfo: {
     flex: 1,
@@ -580,15 +585,16 @@ const styles = StyleSheet.create({
   trackTitle: {
     ...typography.body,
     fontWeight: '500',
-    color: colors.textPrimary,
+    color: colors.text,
   },
   trackTitleActive: {
-    color: colors.textPrimary,
+    fontFamily: fontFamily.semibold,
+    color: colors.text,
     fontWeight: '600',
   },
   trackArtist: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   trackRating: {
     flexDirection: 'row',
@@ -597,7 +603,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   dragHandle: {
     paddingHorizontal: spacing.sm,
@@ -622,7 +628,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     ...typography.h3,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   emptyAddButton: {
@@ -630,7 +636,7 @@ const styles = StyleSheet.create({
     height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
     borderRadius: borderRadius.full,
     marginTop: spacing.xl,
   },
@@ -656,7 +662,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     ...typography.h3,
-    color: colors.textPrimary,
+    color: colors.text,
   },
   modalLoading: {
     padding: spacing.xxl,
@@ -673,12 +679,12 @@ const styles = StyleSheet.create({
   songGroupTitle: {
     ...typography.body,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.text,
     marginBottom: spacing.xs,
   },
   songGroupArtist: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: spacing.sm,
   },
   versionItem: {
@@ -686,14 +692,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.md,
-    backgroundColor: colors.surfaceLight,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: borderRadius.md,
     marginBottom: spacing.sm,
   },
   versionItemSelected: {
-    backgroundColor: colors.surfaceLighter,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.accentStrong,
   },
   versionItemDisabled: {
     opacity: 0.5,
@@ -709,16 +715,16 @@ const styles = StyleSheet.create({
   },
   versionRating: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontWeight: '600',
   },
   versionDate: {
     ...typography.bodySmall,
-    color: colors.textTertiary,
+    color: colors.textMuted,
   },
   versionMemo: {
     ...typography.caption,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
   checkbox: {
@@ -726,17 +732,17 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: borderRadius.sm,
     borderWidth: 2,
-    borderColor: colors.textTertiary,
+    borderColor: colors.textMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.accentStrong,
+    borderColor: colors.accentStrong,
   },
   checkboxDisabledText: {
     ...typography.caption,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     fontSize: 8,
   },
   modalFooter: {
@@ -749,13 +755,13 @@ const styles = StyleSheet.create({
   },
   selectedCount: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontWeight: '600',
   },
   addConfirmButton: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accentStrong,
     borderRadius: borderRadius.md,
   },
   addConfirmButtonDisabled: {
@@ -763,18 +769,18 @@ const styles = StyleSheet.create({
   },
   addConfirmButtonText: {
     ...typography.body,
-    color: colors.background,
+    color: colors.bg,
     fontWeight: '600',
   },
   emptyModalText: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginTop: spacing.lg,
     textAlign: 'center',
   },
   emptyModalSubtext: {
     ...typography.bodySmall,
-    color: colors.textTertiary,
+    color: colors.textMuted,
     marginTop: spacing.xs,
     textAlign: 'center',
   },

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import TrackPlayer, {
   State,
   Event,
@@ -9,6 +9,7 @@ import TrackPlayer, {
   AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
 import { Song, Version } from '../types';
+import { isPastTrimEnd } from '../lib/trim';
 
 interface PlayingTrack {
   song: Song;
@@ -52,6 +53,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [playlistState, setPlaylistState] = useState<PlaylistState | null>(null);
   const [isReady, setIsReady] = useState(false);
+
+  const trimEndHandledRef = useRef<string | null>(null);
 
   const playbackState = usePlaybackState();
   const progress = useProgress();
@@ -137,6 +140,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (newTrack) {
           setCurrentTrackState(newTrack);
           setPlaylistState(prev => prev ? { ...prev, currentIndex: event.index! } : null);
+          if (newTrack.version.trim) { await TrackPlayer.seekTo(newTrack.version.trim.start); }
         }
       }
     });
@@ -163,6 +167,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         duration: track.version.duration,
       });
       await TrackPlayer.play();
+      if (track.version.trim) { await TrackPlayer.seekTo(track.version.trim.start); }
       setCurrentTrackState(track);
     } catch (error) {
       console.error('트랙 설정 실패:', error);
@@ -215,6 +220,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       await TrackPlayer.add(tracks);
       await TrackPlayer.skip(startIndex);
       await TrackPlayer.play();
+      const startTrim = items[startIndex]?.version.trim;
+      if (startTrim) { await TrackPlayer.seekTo(startTrim.start); }
 
       setPlaylistState({
         items,
@@ -240,6 +247,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       console.error('다음 곡 재생 실패:', error);
     }
   }, [playlistState]);
+
+  // trim.end 도달 시 정지/다음 곡
+  useEffect(() => {
+    const trim = currentTrack?.version.trim;
+    if (!trim || !isPlaying) return;
+    if (isPastTrimEnd(progress.position, trim)) {
+      if (trimEndHandledRef.current === currentTrack.version.id) return; // already handled for this track
+      trimEndHandledRef.current = currentTrack.version.id;
+      if (playlistState && playlistState.items.length > 1) {
+        playNext();
+      } else {
+        TrackPlayer.pause();
+      }
+    }
+  }, [progress.position, currentTrack, isPlaying, playlistState, playNext]);
+
+  // 트랙 변경 시 trim 종료 처리 플래그 초기화
+  useEffect(() => {
+    trimEndHandledRef.current = null;
+  }, [currentTrack?.version.id]);
 
   const playPrevious = useCallback(async () => {
     if (!playlistState) return;

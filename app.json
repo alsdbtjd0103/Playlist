@@ -1,22 +1,22 @@
 {
   "expo": {
-    "name": "방구석 플레이리스트",
+    "name": "플리로그",
     "slug": "playlist",
     "scheme": "com.playlist.app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#0f0f0f",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#f4ecdd",
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0f0f0f"
+      "backgroundColor": "#f4ecdd"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.playlist.app",
-      "backgroundColor": "#0f0f0f",
+      "backgroundColor": "#f4ecdd",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "녹음 기능을 사용하기 위해 마이크 접근 권한이 필요합니다.",
         "UIBackgroundModes": ["audio"]
@@ -24,10 +24,10 @@
     },
     "android": {
       "package": "com.playlist.app",
-      "backgroundColor": "#0f0f0f",
+      "backgroundColor": "#f4ecdd",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0f0f0f"
+        "backgroundColor": "#f4ecdd"
       },
       "permissions": [
         "android.permission.RECORD_AUDIO",

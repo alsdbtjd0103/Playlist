@@ -1,104 +1,70 @@
 #!/usr/bin/env node
 /**
- * 방구석 플레이리스트 브랜딩 자산 생성기.
+ * 플리로그(plilog) 브랜딩 자산 생성기.
  *
  * 출력:
- *  - assets/icon.png            1024x1024 (앱 아이콘, 다크 배경)
- *  - assets/adaptive-icon.png   1024x1024 (Android adaptive 전경, 다크 배경)
- *  - assets/splash.png          1242x2436 (스플래시, 다크 배경 + 중앙 로고)
+ *  - assets/icon.png            1024x1024 (앱 아이콘, 웜 샌드 배경)
+ *  - assets/adaptive-icon.png   1024x1024 (Android adaptive 전경, 웜 샌드 배경)
+ *  - assets/splash.png          1242x2436 (스플래시, 웜 샌드 배경 + 파형 + plilog)
  *  - assets/favicon.png         48x48     (웹 favicon)
  *
- * 디자인: #0f0f0f 다크 배경 + 흰색 마이크 아이콘. 노래방 앱 컨셉.
+ * 디자인: 웜 샌드(#f4ecdd) 배경 + 앰버 파형(#c2703d) + plilog 워드마크(#a8542a).
+ * 파형 = 로고 = 녹음화면 = 프로그레스바 (하나의 시각 언어).
  */
 
-const fs = require('node:fs/promises');
 const path = require('node:path');
 const sharp = require('sharp');
 
 const ASSETS_DIR = path.join(__dirname, '..', 'assets');
-const BG_COLOR = '#0f0f0f';
-const FG_COLOR = '#ffffff';
+const BG = '#f4ecdd';
+const WAVE = '#c2703d';
+const WORD = '#a8542a';
+
+// 파형 막대 상대 높이(0~1). 둥근 끝.
+const BARS = [0.34, 0.62, 1.0, 0.5, 0.78, 0.42, 0.9, 0.28];
 
 /**
- * 마이크 아이콘 SVG 생성. canvasSize는 정사각 viewBox 길이.
- * iconScale은 캔버스 대비 아이콘 비율(0~1).
+ * 중앙 정렬 파형을 그리는 <rect> 문자열들.
+ * cx,cy 중심, totalW 전체 폭, maxH 최대 높이, barW 막대 폭.
  */
-function micSvg({ canvasSize, iconScale = 0.4, withBackground = true }) {
-  const iconSize = canvasSize * iconScale;
+function waveRects({ cx, cy, totalW, maxH, barW, color }) {
+  const gap = (totalW - BARS.length * barW) / (BARS.length - 1);
+  const startX = cx - totalW / 2;
+  return BARS.map((h, i) => {
+    const bh = Math.max(barW, h * maxH);
+    const x = startX + i * (barW + gap);
+    const y = cy - bh / 2;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW}" height="${bh.toFixed(1)}" rx="${(barW / 2).toFixed(1)}" fill="${color}"/>`;
+  }).join('\n  ');
+}
+
+/** 앱 아이콘 SVG. 배경 + 중앙 파형. */
+function iconSvg({ canvasSize, waveScale = 0.52 }) {
   const cx = canvasSize / 2;
   const cy = canvasSize / 2;
-
-  // 마이크 크기 비례 좌표 (iconSize 기준)
-  const capsuleW = iconSize * 0.4;
-  const capsuleH = iconSize * 0.7;
-  const capsuleR = capsuleW / 2;
-  const capsuleX = cx - capsuleW / 2;
-  const capsuleY = cy - capsuleH * 0.7;
-
-  const standW = iconSize * 0.7;
-  const standY = cy + iconSize * 0.05;
-  const standLeftX = cx - standW / 2;
-  const standRightX = cx + standW / 2;
-
-  const poleX = cx;
-  const poleTopY = standY;
-  const poleBottomY = cy + iconSize * 0.3;
-
-  const baseY = poleBottomY;
-  const baseHalfW = iconSize * 0.22;
-  const stroke = iconSize * 0.06;
-
-  const background = withBackground
-    ? `<rect width="${canvasSize}" height="${canvasSize}" fill="${BG_COLOR}"/>`
-    : '';
-
+  const totalW = canvasSize * waveScale;
+  const maxH = canvasSize * waveScale * 0.62;
+  const barW = totalW / (BARS.length * 1.7);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasSize}" height="${canvasSize}" viewBox="0 0 ${canvasSize} ${canvasSize}">
-  ${background}
-  <rect x="${capsuleX}" y="${capsuleY}" width="${capsuleW}" height="${capsuleH}" rx="${capsuleR}" fill="${FG_COLOR}"/>
-  <path d="M ${standLeftX} ${cy} Q ${standLeftX} ${standY} ${poleX} ${standY} Q ${standRightX} ${standY} ${standRightX} ${cy}" stroke="${FG_COLOR}" stroke-width="${stroke}" fill="none" stroke-linecap="round"/>
-  <line x1="${poleX}" y1="${poleTopY}" x2="${poleX}" y2="${poleBottomY}" stroke="${FG_COLOR}" stroke-width="${stroke}" stroke-linecap="round"/>
-  <line x1="${cx - baseHalfW}" y1="${baseY}" x2="${cx + baseHalfW}" y2="${baseY}" stroke="${FG_COLOR}" stroke-width="${stroke}" stroke-linecap="round"/>
+  <rect width="${canvasSize}" height="${canvasSize}" fill="${BG}"/>
+  ${waveRects({ cx, cy, totalW, maxH, barW, color: WAVE })}
 </svg>`;
 }
 
-/**
- * 스플래시 전용 SVG. 1242x2436. 중앙에 로고 + 아래 텍스트.
- */
+/** 스플래시 SVG. 1242x2436. 중앙 파형 + 아래 plilog 워드마크. */
 function splashSvg() {
   const W = 1242;
   const H = 2436;
   const cx = W / 2;
-  const cy = H / 2 - 100;
-  const iconSize = 400;
-
-  // 마이크 (icon용 SVG 좌표를 그대로 사용하되 위치만 평행이동)
-  const capsuleW = iconSize * 0.4;
-  const capsuleH = iconSize * 0.7;
-  const capsuleR = capsuleW / 2;
-  const capsuleX = cx - capsuleW / 2;
-  const capsuleY = cy - capsuleH * 0.7;
-
-  const standW = iconSize * 0.7;
-  const standY = cy + iconSize * 0.05;
-  const standLeftX = cx - standW / 2;
-  const standRightX = cx + standW / 2;
-
-  const poleX = cx;
-  const poleTopY = standY;
-  const poleBottomY = cy + iconSize * 0.3;
-  const baseY = poleBottomY;
-  const baseHalfW = iconSize * 0.22;
-  const stroke = iconSize * 0.06;
-
-  const textY = cy + 380;
-
+  const cy = H / 2 - 80;
+  const totalW = 520;
+  const maxH = 300;
+  const barW = totalW / (BARS.length * 1.7);
+  const textY = cy + 320;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect width="${W}" height="${H}" fill="${BG_COLOR}"/>
-  <rect x="${capsuleX}" y="${capsuleY}" width="${capsuleW}" height="${capsuleH}" rx="${capsuleR}" fill="${FG_COLOR}"/>
-  <path d="M ${standLeftX} ${cy} Q ${standLeftX} ${standY} ${poleX} ${standY} Q ${standRightX} ${standY} ${standRightX} ${cy}" stroke="${FG_COLOR}" stroke-width="${stroke}" fill="none" stroke-linecap="round"/>
-  <line x1="${poleX}" y1="${poleTopY}" x2="${poleX}" y2="${poleBottomY}" stroke="${FG_COLOR}" stroke-width="${stroke}" stroke-linecap="round"/>
-  <line x1="${cx - baseHalfW}" y1="${baseY}" x2="${cx + baseHalfW}" y2="${baseY}" stroke="${FG_COLOR}" stroke-width="${stroke}" stroke-linecap="round"/>
-  <text x="${cx}" y="${textY}" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif" font-size="72" font-weight="700" fill="${FG_COLOR}" text-anchor="middle" letter-spacing="-2">방구석 플레이리스트</text>
+  <rect width="${W}" height="${H}" fill="${BG}"/>
+  ${waveRects({ cx, cy, totalW, maxH, barW, color: WAVE })}
+  <text x="${cx}" y="${textY}" font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-size="150" font-weight="800" letter-spacing="-6" fill="${WORD}" text-anchor="middle">plilog</text>
 </svg>`;
 }
 
@@ -108,23 +74,14 @@ async function writeSvgToPng(svgString, outPath) {
 }
 
 async function main() {
-  await writeSvgToPng(
-    micSvg({ canvasSize: 1024, iconScale: 0.45, withBackground: true }),
-    path.join(ASSETS_DIR, 'icon.png')
-  );
+  await writeSvgToPng(iconSvg({ canvasSize: 1024, waveScale: 0.5 }), path.join(ASSETS_DIR, 'icon.png'));
 
-  // Android adaptive: foreground는 캔버스 가운데 66% 안에 들어와야 안전.
-  await writeSvgToPng(
-    micSvg({ canvasSize: 1024, iconScale: 0.5, withBackground: true }),
-    path.join(ASSETS_DIR, 'adaptive-icon.png')
-  );
+  // Android adaptive: 전경은 캔버스 가운데 66% 안전영역에 들어와야 한다.
+  await writeSvgToPng(iconSvg({ canvasSize: 1024, waveScale: 0.42 }), path.join(ASSETS_DIR, 'adaptive-icon.png'));
 
   await writeSvgToPng(splashSvg(), path.join(ASSETS_DIR, 'splash.png'));
 
-  await writeSvgToPng(
-    micSvg({ canvasSize: 48, iconScale: 0.6, withBackground: true }),
-    path.join(ASSETS_DIR, 'favicon.png')
-  );
+  await writeSvgToPng(iconSvg({ canvasSize: 48, waveScale: 0.66 }), path.join(ASSETS_DIR, 'favicon.png'));
 
   console.log('\n모든 브랜딩 자산 생성 완료.');
 }

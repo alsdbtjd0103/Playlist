@@ -20,7 +20,13 @@ const generateId = (): string => {
 
 // === 곡 관리 ===
 
-export const addSong = async (title: string, artist?: string): Promise<string> => {
+export interface SongMeta {
+  artworkUrl?: string;
+  itunesTrackId?: number;
+  previewUrl?: string;
+}
+
+export const addSong = async (title: string, artist?: string, meta?: SongMeta): Promise<string> => {
   const now = new Date();
   const songId = generateId();
 
@@ -31,6 +37,9 @@ export const addSong = async (title: string, artist?: string): Promise<string> =
     createdAt: now,
     updatedAt: now,
     defaultVersionId: undefined,
+    artworkUrl: meta?.artworkUrl,
+    itunesTrackId: meta?.itunesTrackId,
+    previewUrl: meta?.previewUrl,
   };
 
   const songs = await getAllSongs();
@@ -101,7 +110,8 @@ export const addVersion = async (
   storageUrl: string,
   rating: number,
   duration?: number,
-  memo?: string
+  memo?: string,
+  extra?: { waveform?: number[]; trim?: { start: number; end: number }; editedFrom?: string }
 ): Promise<string> => {
   const now = new Date();
   const versionId = generateId();
@@ -115,6 +125,9 @@ export const addVersion = async (
     duration: duration || undefined,
     recordedAt: now,
     memo: memo || undefined,
+    waveform: extra?.waveform,
+    trim: extra?.trim,
+    editedFrom: extra?.editedFrom,
   };
 
   const versions = await getAllVersions();
@@ -183,6 +196,35 @@ export const deleteVersion = async (versionId: string): Promise<void> => {
   const versions = await getAllVersions();
   const filteredVersions = versions.filter((v) => v.id !== versionId);
   await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(filteredVersions));
+};
+
+export const applyTrimToVersion = async (
+  versionId: string,
+  range: { start: number; end: number }
+): Promise<void> => {
+  const versions = await getAllVersions();
+  const idx = versions.findIndex((v) => v.id === versionId);
+  if (idx !== -1) {
+    versions[idx].trim = range;
+    await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
+  }
+};
+
+export const createTrimmedVersion = async (
+  sourceVersionId: string,
+  range: { start: number; end: number }
+): Promise<string> => {
+  const source = await getVersion(sourceVersionId);
+  if (!source) throw new Error('원본 버전을 찾을 수 없습니다.');
+  return addVersion(
+    source.songId,
+    source.fileName,
+    source.storageUrl,
+    source.rating,
+    range.end - range.start,
+    source.memo,
+    { waveform: source.waveform, trim: range, editedFrom: source.id }
+  );
 };
 
 // === 플레이리스트 관리 ===
