@@ -1,15 +1,24 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { View, BackHandler, ToastAndroid, Platform, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { NavigationContainer, DefaultTheme, useNavigationContainerRef } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme as NavLightTheme,
+  DarkTheme as NavDarkTheme,
+  useNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { Ionicons } from '@expo/vector-icons';
 import TrackPlayer from 'react-native-track-player';
 import { PlaybackService } from './services/PlaybackService';
 import { RootStackParamList } from './types';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { useAppFonts } from './lib/fonts';
+import { ColorTokens, fontFamily } from './lib/theme';
 
 // TrackPlayer 백그라운드 서비스 등록
 TrackPlayer.registerPlaybackService(() => PlaybackService);
@@ -22,29 +31,20 @@ import { PlayerProvider } from './contexts/PlayerContext';
 import MiniPlayer from './components/MiniPlayer';
 import NowPlayingScreen from './components/NowPlayingScreen';
 
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator<RootStackParamList>();
 const PlaylistStack = createNativeStackNavigator<RootStackParamList>();
 
-const DarkTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: '#0f0f0f',
-    card: '#0f0f0f',
-    text: '#ffffff',
-    border: '#1f1f1f',
-  },
-};
-
-function HomeStackScreen() {
+function HomeStackScreen({ bg }: { bg: string }) {
   return (
     <HomeStack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'fade',
         animationDuration: 150,
-        contentStyle: { backgroundColor: '#0f0f0f' },
+        contentStyle: { backgroundColor: bg },
         gestureEnabled: false,
       }}
     >
@@ -54,14 +54,14 @@ function HomeStackScreen() {
   );
 }
 
-function PlaylistStackScreen() {
+function PlaylistStackScreen({ bg }: { bg: string }) {
   return (
     <PlaylistStack.Navigator
       screenOptions={{
         headerShown: false,
         animation: 'fade',
         animationDuration: 150,
-        contentStyle: { backgroundColor: '#0f0f0f' },
+        contentStyle: { backgroundColor: bg },
         gestureEnabled: false,
       }}
     >
@@ -73,18 +73,22 @@ function PlaylistStackScreen() {
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { colors, scheme } = useTheme();
+  const styles = useMemo(() => makeTabStyles(colors), [colors]);
+  const activeColor = scheme === 'dark' ? colors.accent : colors.accentStrong;
 
   return (
     <View>
       <MiniPlayer />
-      <View style={[tabBarStyles.container, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
+      <View style={[styles.container, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label = options.tabBarLabel !== undefined
-            ? options.tabBarLabel
-            : options.title !== undefined
-              ? options.title
-              : route.name;
+          const label =
+            options.tabBarLabel !== undefined
+              ? options.tabBarLabel
+              : options.title !== undefined
+                ? options.title
+                : route.name;
 
           const isFocused = state.index === index;
 
@@ -94,31 +98,18 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               target: route.key,
               canPreventDefault: true,
             });
-
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);
             }
           };
 
           const iconName = route.name === 'HomeTab' ? 'musical-notes' : 'albums';
+          const tint = isFocused ? activeColor : colors.textMuted;
 
           return (
-            <TouchableOpacity
-              key={route.key}
-              onPress={onPress}
-              style={tabBarStyles.tab}
-            >
-              <Ionicons
-                name={iconName as any}
-                size={24}
-                color={isFocused ? '#ffffff' : '#717171'}
-              />
-              <Text style={[
-                tabBarStyles.label,
-                { color: isFocused ? '#ffffff' : '#717171' }
-              ]}>
-                {label as string}
-              </Text>
+            <TouchableOpacity key={route.key} onPress={onPress} style={styles.tab}>
+              <Ionicons name={iconName as any} size={24} color={tint} />
+              <Text style={[styles.label, { color: tint }]}>{label as string}</Text>
             </TouchableOpacity>
           );
         })}
@@ -127,27 +118,30 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   );
 }
 
-const tabBarStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    backgroundColor: '#0f0f0f',
-    borderTopColor: '#1f1f1f',
-    borderTopWidth: 1,
-    paddingTop: 8,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-});
+const makeTabStyles = (c: ColorTokens) =>
+  StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      backgroundColor: c.surface,
+      borderTopColor: c.border,
+      borderTopWidth: 1,
+      paddingTop: 8,
+    },
+    tab: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+    },
+    label: {
+      fontFamily: fontFamily.semibold,
+      fontSize: 11,
+    },
+  });
 
-export default function App() {
+function AppInner() {
+  const { colors, scheme } = useTheme();
+  const fontsLoaded = useAppFonts();
   const navigationRef = useNavigationContainerRef();
   const backPressedOnce = useRef(false);
 
@@ -158,12 +152,10 @@ export default function App() {
     const currentTabRoute = state.routes[state.index];
     const tabState = currentTabRoute?.state;
 
-    // 상세 페이지에 있으면 기본 뒤로가기 동작
     if (tabState && tabState.index && tabState.index > 0) {
       return false;
     }
 
-    // 루트 화면에서 두 번 눌러 종료
     if (backPressedOnce.current) {
       BackHandler.exitApp();
       return true;
@@ -186,34 +178,63 @@ export default function App() {
     return () => subscription.remove();
   }, [handleBackPress]);
 
+  const onLayout = useCallback(async () => {
+    if (fontsLoaded) {
+      await SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded]);
+
+  const navTheme = useMemo(() => {
+    const base = scheme === 'dark' ? NavDarkTheme : NavLightTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        background: colors.bg,
+        card: colors.bg,
+        text: colors.text,
+        border: colors.border,
+        primary: colors.accent,
+      },
+    };
+  }, [scheme, colors]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }} onLayout={onLayout}>
       <SafeAreaProvider>
         <PlayerProvider>
-          <NavigationContainer ref={navigationRef} theme={DarkTheme}>
+          <NavigationContainer ref={navigationRef} theme={navTheme}>
             <View style={{ flex: 1 }}>
               <Tab.Navigator
                 tabBar={(props) => <CustomTabBar {...props} />}
-                sceneContainerStyle={{ backgroundColor: '#0f0f0f' }}
+                sceneContainerStyle={{ backgroundColor: colors.bg }}
                 screenOptions={{ headerShown: false }}
               >
-                <Tab.Screen
-                  name="HomeTab"
-                  component={HomeStackScreen}
-                  options={{ tabBarLabel: '노래' }}
-                />
-                <Tab.Screen
-                  name="PlaylistTab"
-                  component={PlaylistStackScreen}
-                  options={{ tabBarLabel: '플레이리스트' }}
-                />
+                <Tab.Screen name="HomeTab" options={{ tabBarLabel: '노래' }}>
+                  {() => <HomeStackScreen bg={colors.bg} />}
+                </Tab.Screen>
+                <Tab.Screen name="PlaylistTab" options={{ tabBarLabel: '플레이리스트' }}>
+                  {() => <PlaylistStackScreen bg={colors.bg} />}
+                </Tab.Screen>
               </Tab.Navigator>
               <NowPlayingScreen />
             </View>
           </NavigationContainer>
-          <StatusBar style="light" />
+          <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         </PlayerProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppInner />
+    </ThemeProvider>
   );
 }
