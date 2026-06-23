@@ -339,6 +339,26 @@ const saveNew = async (result: DenoiseResult) => {
 
 ---
 
+## 구현 진행 현황 (2026-06-24)
+
+| 단계 | 상태 | 비고 |
+|---|---|---|
+| Phase 0 품질 게이트 | 🟡 스크립트 제공 | `scripts/denoise-quality-test.sh` — 사용자가 실제 샘플로 직접 A/B |
+| Task 1 모듈 스캐폴드 | ✅ 완료 | `modules/audio-denoise` (JS 진입/진행률 리스너) |
+| Task 2 libDF 바이너리 | 🟠 코드/스크립트 완료, **바이너리 생성 필요** | `build-libdf.sh`+`NATIVE_BINARIES.md` — Rust 빌드 환경에서 1회 실행 |
+| Task 3 iOS 네이티브 | ✅ 소스 완료 | `ios/AudioDenoiseModule.swift`(+podspec/modulemap) — dev build 시 컴파일 |
+| Task 4 Android 네이티브 | ✅ 소스 완료 | `android/.../AudioDenoiseModule.kt`+`DfNative.kt` — JNI shim 필요(주석) |
+| Task 5 JS 래퍼 | ✅ 완료·검증 | `lib/nativeDenoise.ts`, Jest 4/4 green |
+| Task 6 UI 연결 | ✅ 완료·검증 | `DenoiseScreen`+메뉴+네비, Jest 3/3, 전체 83/83 green |
+| Task 7 dev build 검증 | ⬜ 미착수 | 실기기/시뮬레이터 필요(헤드리스 불가) |
+
+**남은 일(개발자 빌드 환경 필수):**
+1. Phase 0 품질 게이트 실행 → 가창 손상 없는지 A/B 판정(불합격 시 C안 전환).
+2. `build-libdf.sh`로 libDeepFilter 바이너리 생성 + 모델 가중치 `assets/` 배치 (Android은 JNI shim 포함).
+3. `npx expo prebuild --clean && expo run:ios|android` 후 Task 7 수동 시나리오 검증.
+
+> JS 계층(Task 5·6)은 Jest로 완전 검증됨. 네이티브(Task 2~4)·기기 검증(Task 7)만 빌드 환경에서 남음.
+
 ## Self-Review / 한계·리스크
 - **가창 품질이 최대 리스크** → Phase 0 게이트 + 앱 내 A/B 미리듣기로 이중 방어. 사용자가 정제본을 거부하면 저장 안 함.
 - **앱 용량 +10~20MB**(모델·바이너리), 처리 수 초·배터리 → "정제 중" UX로 흡수.
