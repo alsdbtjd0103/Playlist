@@ -40,8 +40,21 @@ git clone https://github.com/Rikorose/DeepFilterNet
 DF_SRC=$(pwd)/DeepFilterNet CRATE=libDF \
   ./modules/audio-denoise/scripts/build-libdf.sh all
 # 4) DeepFilterNet3 모델을 modules/audio-denoise/assets/ 에 배치
-# 5) npx expo prebuild --clean && npx expo run:android   (또는 run:ios)
+# 5) package.json 의 expo.autolinking.exclude 에서 "audio-denoise" 제거 (아래 참고)
+# 6) npx expo prebuild --clean && npx expo run:android   (또는 run:ios)
 ```
+
+## ⚠️ autolinking 제외 (바이너리 준비 전까지)
+
+바이너리가 없으면 빌드가 깨지므로, **준비 전까지** `package.json` 에서 autolinking 제외해 둔다:
+
+```json
+"expo": { "autolinking": { "exclude": ["audio-denoise"] } }
+```
+
+이 상태에선 네이티브 모듈이 링크되지 않아 `isNativeDenoiseAvailable()` 가 false →
+앱에서 "잡음 제거" 메뉴가 숨겨지고 나머지 기능엔 영향이 없다.
+**위 1~4단계로 바이너리/모델을 배치한 뒤 이 exclude 를 제거**하면 기능이 활성화된다.
 
 ## C API (df.h) 기대 시그니처
 
