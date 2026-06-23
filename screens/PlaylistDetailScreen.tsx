@@ -13,9 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  NestableDraggableFlatList,
-  NestableScrollContainer,
+import DraggableFlatList, {
   ScaleDecorator,
   RenderItemParams,
 } from 'react-native-draggable-flatlist';
@@ -32,6 +30,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import Waveform from '../components/Waveform';
+import { logEvent, logScreen } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaylistDetail'>;
 
@@ -62,6 +61,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
   useFocusEffect(
     useCallback(() => {
       fetchPlaylist();
+      logScreen('PlaylistDetail');
     }, [])
   );
 
@@ -123,6 +123,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
       setAddModalVisible(false);
       setSelectedVersions(new Set());
       await fetchPlaylist();
+      logEvent('playlist_songs_added', { count: versionsArray.length });
       Alert.alert('완료', `${versionsArray.length}개의 곡이 추가되었습니다.`);
     } catch (error) {
       console.error('곡 추가 실패:', error);
@@ -294,32 +295,37 @@ export default function PlaylistDetailScreen({ route }: Props) {
           )}
         </View>
       ) : (
-        <NestableScrollContainer style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.playlistHeader}>
-            <View style={styles.playlistCover}>
-              <Ionicons name="musical-notes" size={48} color={colors.textMuted} />
+        <DraggableFlatList
+          data={getSortedItems(playlist.items)}
+          renderItem={renderTrackItem}
+          keyExtractor={(item) => item.id}
+          onDragEnd={isDragEnabled ? handleDragEnd : undefined}
+          activationDistance={isDragEnabled ? 5 : 999}
+          containerStyle={styles.content}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.playlistHeader}>
+              <View style={styles.playlistCover}>
+                <Ionicons name="musical-notes" size={48} color={colors.textMuted} />
+              </View>
+              <View style={styles.playlistInfo}>
+                <Text style={styles.playlistTitle}>{playlist.name}</Text>
+                <Text style={styles.playlistCount}>{playlist.items.length}곡</Text>
+                <TouchableOpacity
+                  style={styles.playAllButton}
+                  onPress={() => {
+                    handleTrackPress(0);
+                    logEvent('playlist_play_all', { count: playlist.items.length });
+                  }}
+                >
+                  <Ionicons name="play" size={20} color={colors.bg} />
+                  <Text style={styles.playAllText}>전체 재생</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.playlistInfo}>
-              <Text style={styles.playlistTitle}>{playlist.name}</Text>
-              <Text style={styles.playlistCount}>{playlist.items.length}곡</Text>
-              <TouchableOpacity style={styles.playAllButton} onPress={() => handleTrackPress(0)}>
-                <Ionicons name="play" size={20} color={colors.bg} />
-                <Text style={styles.playAllText}>전체 재생</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.trackListSection}>
-            <NestableDraggableFlatList
-              data={getSortedItems(playlist.items)}
-              renderItem={renderTrackItem}
-              keyExtractor={(item) => item.id}
-              onDragEnd={isDragEnabled ? handleDragEnd : undefined}
-              activationDistance={isDragEnabled ? 5 : 999}
-              contentContainerStyle={styles.trackList}
-            />
-          </View>
-        </NestableScrollContainer>
+          }
+        />
       )}
 
       <Modal
@@ -533,11 +539,8 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     fontWeight: '600',
     color: colors.bg,
   },
-  trackListSection: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-  },
-  trackList: {
+  listContent: {
+    paddingBottom: spacing.xxl,
     gap: spacing.sm,
   },
   trackItem: {
@@ -545,6 +548,7 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
+    marginHorizontal: spacing.lg,
     paddingLeft: spacing.md,
     paddingRight: spacing.xs,
     paddingVertical: spacing.md,

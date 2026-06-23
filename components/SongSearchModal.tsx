@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAllSongs, addSong } from '../lib/database';
+import { logEvent } from '../lib/analytics';
 import { searchTracks, ITunesTrack } from '../lib/itunes';
 import { matchesSearch } from '../lib/search';
 import { Song } from '../types';
@@ -77,6 +78,7 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
       const id = await addSong(t.trackName, t.artistName, {
         artworkUrl: t.artworkUrl, itunesTrackId: t.itunesTrackId, previewUrl: t.previewUrl,
       });
+      logEvent('song_added', { source: 'itunes' });
       onNavigateToSong(id); onClose();
     } catch {
       Alert.alert('오류', '곡 추가에 실패했습니다.');
@@ -89,6 +91,7 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
     setBusy(true);
     try {
       const id = await addSong(manualTitle.trim(), manualArtist.trim() || undefined);
+      logEvent('song_added', { source: 'manual' });
       onNavigateToSong(id); onClose();
     } catch {
       Alert.alert('오류', '곡 추가에 실패했습니다.');

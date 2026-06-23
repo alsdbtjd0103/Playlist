@@ -10,6 +10,7 @@ import {
   GestureResponderEvent,
   TouchableWithoutFeedback,
   Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -31,6 +32,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import Waveform from '../components/Waveform';
+import { logEvent, logScreen } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SongDetail'>;
 
@@ -125,12 +127,15 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [editingVersion, setEditingVersion] = useState<Version | null>(null);
   const [newRating, setNewRating] = useState(0);
+  const [memoModalVisible, setMemoModalVisible] = useState(false);
+  const [newMemo, setNewMemo] = useState('');
 
   const handlePlayVersion = (version: Version) => {
     if (!song || !song.versions || song.versions.length === 0) return;
     const items = song.versions.map((v) => ({ song, version: v }));
     const startIndex = items.findIndex((it) => it.version.id === version.id);
     setPlaylist(items, startIndex >= 0 ? startIndex : 0);
+    logEvent('version_played', { rating: version.rating, hasMemo: !!version.memo });
   };
 
   const fetchSong = async () => {
@@ -161,6 +166,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       fetchSong();
+      logScreen('SongDetail');
     }, [songId])
   );
 
@@ -228,9 +234,36 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         setRatingModalVisible(false);
         setEditingVersion(null);
         await fetchSong();
+        logEvent('version_rating_edited', { rating: newRating });
       } catch (error) {
         console.error('평점 수정 실패:', error);
         Alert.alert('오류', '평점 수정에 실패했습니다.');
+      }
+    }
+  };
+
+  const handleEditMemo = () => {
+    if (menuState.version) {
+      setEditingVersion(menuState.version);
+      setNewMemo(menuState.version.memo ?? '');
+      setMemoModalVisible(true);
+      closeMenu();
+    }
+  };
+
+  const handleSaveMemo = async () => {
+    if (editingVersion) {
+      try {
+        const trimmed = newMemo.trim();
+        await updateVersion(editingVersion.id, { memo: trimmed });
+        setMemoModalVisible(false);
+        setEditingVersion(null);
+        setNewMemo('');
+        await fetchSong();
+        logEvent('version_memo_edited', { length: trimmed.length });
+      } catch (error) {
+        console.error('메모 수정 실패:', error);
+        Alert.alert('오류', '메모 수정에 실패했습니다.');
       }
     }
   };
@@ -240,6 +273,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
       const { fileName, localUri } = await saveAudioLocally(songId, audioUri);
       await addVersion(songId, fileName, localUri, rating, duration, memo, { waveform });
       await fetchSong();
+      logEvent('version_recorded', { rating, hasMemo: !!memo, duration: duration ?? 0 });
     } catch (error) {
       console.error('녹음 저장 실패:', error);
       throw error;
@@ -284,7 +318,10 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.recordButton}
-            onPress={() => setRecorderVisible(true)}
+            onPress={() => {
+              setRecorderVisible(true);
+              logEvent('record_open', { songId });
+            }}
             activeOpacity={0.8}
           >
             <View style={styles.recordButtonInner}>
@@ -370,6 +407,52 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         </View>
       </Modal>
 
+      {/* 메모 수정 모달 */}
+      <Modal
+        visible={memoModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMemoModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>메모 수정</Text>
+              <TouchableOpacity onPress={() => setMemoModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.memoInputWrapper}>
+              <TextInput
+                style={styles.memoInput}
+                placeholder="이 녹음에 대한 메모를 입력하세요"
+                placeholderTextColor={colors.textMuted}
+                value={newMemo}
+                onChangeText={setNewMemo}
+                multiline
+                numberOfLines={4}
+                autoFocus
+                maxLength={500}
+              />
+            </View>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setMemoModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleSaveMemo}
+              >
+                <Text style={styles.confirmButtonText}>저장</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* 드롭다운 메뉴 */}
       {menuState.visible && (
         <TouchableWithoutFeedback onPress={closeMenu}>
@@ -398,6 +481,13 @@ export default function SongDetailScreen({ route, navigation }: Props) {
               >
                 <Ionicons name="star-outline" size={20} color={colors.star} />
                 <Text style={styles.menuItemText}>평점 수정</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={handleEditMemo}
+              >
+                <Ionicons name="create-outline" size={20} color={colors.text} />
+                <Text style={styles.menuItemText}>메모 수정</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.menuItem}
@@ -687,6 +777,20 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
     paddingVertical: spacing.xl,
+  },
+  memoInputWrapper: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: spacing.md,
+  },
+  memoInput: {
+    padding: spacing.md,
+    ...typography.bodySmall,
+    color: colors.text,
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   modalOverlay: {
     flex: 1,

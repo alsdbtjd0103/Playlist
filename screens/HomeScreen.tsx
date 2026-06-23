@@ -23,6 +23,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import Waveform from "../components/Waveform";
 import { SongSearchModal } from '../components/SongSearchModal';
 import { AlbumArt } from '../components/AlbumArt';
+import { logScreen } from "../lib/analytics";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -99,6 +100,7 @@ export default function HomeScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       fetchSongs();
+      logScreen('Home');
     }, [])
   );
 
