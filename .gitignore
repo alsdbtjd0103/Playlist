@@ -41,8 +41,11 @@ maestro-*.log
 # Claude Code (로컬 전용 설정)
 .claude/
 
-# audio-denoise 네이티브 바이너리/모델 (개발자가 빌드 환경에서 생성, NATIVE_BINARIES.md 참고)
+# audio-denoise 네이티브 바이너리/모델/생성헤더 (개발자가 빌드 환경에서 생성, NATIVE_BINARIES.md 참고)
 modules/audio-denoise/ios/lib/*.a
-modules/audio-denoise/android/src/main/jniLibs/
+modules/audio-denoise/ios/lib/df.h
+modules/audio-denoise/ios/lib/df.xcframework/
+modules/audio-denoise/android/src/main/cpp/prebuilt/
+modules/audio-denoise/android/src/main/cpp/include/df.h
 modules/audio-denoise/assets/*.tar.gz
 denoise-samples/

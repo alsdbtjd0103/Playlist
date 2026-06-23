@@ -52,12 +52,15 @@ class AudioDenoiseModule : Module() {
       val hop = DfNative.dfFrameLen(state)
       if (hop <= 0) throw Exception("프레임 길이 오류")
       val out = FloatArray(pcm.size)
+      val chunkFrames = 50          // 한 JNI 호출당 처리할 프레임 수(진행률 갱신 단위)
       var i = 0
-      var k = 0
       while (i + hop <= pcm.size) {
-        DfNative.dfProcess(state, pcm, out, i, hop)
-        i += hop
-        if (k++ % 50 == 0) onProgress(i.toDouble() / pcm.size)
+        val framesLeft = (pcm.size - i) / hop
+        val n = minOf(chunkFrames, framesLeft)
+        val done = DfNative.dfProcessChunk(state, pcm, out, i, n)
+        if (done <= 0) break
+        i += done * hop
+        onProgress(i.toDouble() / pcm.size)
       }
       onProgress(1.0)
       return out
