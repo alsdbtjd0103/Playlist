@@ -1,0 +1,6 @@
+// libDeepFilter C API 를 Swift 모듈 `libdf` 로 노출.
+// (df.h 는 build-libdf.sh 의 cbindgen 으로 생성됨)
+module libdf {
+  header "df.h"
+  export *
+}
