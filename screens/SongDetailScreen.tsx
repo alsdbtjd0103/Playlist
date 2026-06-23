@@ -33,8 +33,12 @@ import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../l
 import { useTheme } from '../contexts/ThemeContext';
 import Waveform from '../components/Waveform';
 import { logEvent, logScreen } from '../lib/analytics';
+import { isNativeDenoiseAvailable } from '../lib/nativeDenoise';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SongDetail'>;
+
+// 네이티브 잡음 제거 모듈 가용 여부(빌드 시 고정 — Expo Go 등에서는 메뉴 숨김)
+const DENOISE_AVAILABLE = isNativeDenoiseAvailable();
 
 const VersionItem = ({
   version,
@@ -502,6 +506,22 @@ export default function SongDetailScreen({ route, navigation }: Props) {
                 <Ionicons name="cut-outline" size={20} color={colors.text} />
                 <Text style={styles.menuItemText}>구간 편집</Text>
               </TouchableOpacity>
+              {DENOISE_AVAILABLE && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    if (menuState.version) {
+                      const vId = menuState.version.id;
+                      closeMenu();
+                      navigation.navigate('Denoise', { versionId: vId });
+                    }
+                  }}
+                  testID="version-menu-denoise"
+                >
+                  <Ionicons name="sparkles-outline" size={20} color={colors.text} />
+                  <Text style={styles.menuItemText}>잡음 제거</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => menuState.version && handleDeleteVersion(menuState.version.id)}

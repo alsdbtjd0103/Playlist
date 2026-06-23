@@ -31,6 +31,19 @@ export const saveAudioLocally = async (
 };
 
 /**
+ * 잡음 제거된 임시 파일을 영구 위치(recordings/{songId}/)로 저장.
+ * 트림의 saveTrimmedFile과 동일하게 saveAudioLocally 규칙을 재사용한다.
+ * @param songId 곡 ID
+ * @param tempUri 정제된 임시 파일 URI
+ */
+export const saveDenoisedFile = async (
+  songId: string,
+  tempUri: string
+): Promise<{ fileName: string; localUri: string }> => {
+  return saveAudioLocally(songId, tempUri);
+};
+
+/**
  * 로컬 파일 시스템에서 오디오 파일 삭제
  * @param localUri 로컬 파일 URI
  */

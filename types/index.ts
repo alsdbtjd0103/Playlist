@@ -65,4 +65,5 @@ export type RootStackParamList = {
   Playlists: undefined;
   PlaylistDetail: { playlistId: string };
   TrimEditor: { versionId: string };
+  Denoise: { versionId: string };
 };
