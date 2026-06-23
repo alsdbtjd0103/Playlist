@@ -56,6 +56,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
+  const [reorderMode, setReorderMode] = useState(false);
   const { setPlaylist, playlistState } = usePlayer();
 
   useFocusEffect(
@@ -196,8 +197,22 @@ export default function PlaylistDetailScreen({ route }: Props) {
     });
   };
 
+  // 순서 편집 모드 토글 — 켜면 직접순서로 되돌리고 드래그 활성화.
+  const toggleReorder = () => {
+    setReorderMode(prev => {
+      const next = !prev;
+      if (next) setSortOrder(null);
+      return next;
+    });
+  };
+
   const sortLabel = sortOrder === 'newest' ? '최신순' : sortOrder === 'oldest' ? '오래된순' : '직접순서';
-  const isDragEnabled = sortOrder === null;
+  // 드래그는 "순서 편집" 모드에서만 활성화한다. 기본 상태는 항상 스크롤이 되어야 한다.
+  // RNDFL은 리스트 전체를 Pan으로 감싸고 activeOffsetY(activationDistance)로 스크롤을 가로채므로,
+  // 편집 모드가 아닐 때는 activationDistance를 매우 크게 두어 Pan이 스크롤을 강탈하지 못하게 한다.
+  const isDragEnabled = reorderMode;
+  const DRAG_OFF_DISTANCE = 100000; // 사실상 Pan 비활성 → 스크롤 자유
+  const DRAG_ON_DISTANCE = 10;      // 편집 모드: 핸들 드래그 반응(가장자리 auto-scroll로 긴 목록 이동)
 
   const renderTrackItem = ({ item, getIndex, drag, isActive }: RenderItemParams<PlaylistItem>) => {
     const index = getIndex() ?? 0;
@@ -261,7 +276,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
           <Text style={[styles.logoText, { color: wordColor }]}>plilog</Text>
         </View>
         <View style={styles.headerActions}>
-          {playlist.items.length > 0 && (
+          {playlist.items.length > 0 && !reorderMode && (
             <TouchableOpacity
               style={[styles.sortButton, sortOrder !== null && styles.sortButtonActive]}
               onPress={cycleSortOrder}
@@ -272,6 +287,20 @@ export default function PlaylistDetailScreen({ route }: Props) {
                 color={colors.text}
               />
               <Text style={styles.sortButtonText}>{sortLabel}</Text>
+            </TouchableOpacity>
+          )}
+          {playlist.items.length > 1 && (
+            <TouchableOpacity
+              style={[styles.sortButton, reorderMode && styles.sortButtonActive]}
+              onPress={toggleReorder}
+              testID="reorder-toggle"
+            >
+              <Ionicons
+                name={reorderMode ? 'checkmark' : 'swap-vertical-outline'}
+                size={16}
+                color={colors.text}
+              />
+              <Text style={styles.sortButtonText}>{reorderMode ? '완료' : '순서 편집'}</Text>
             </TouchableOpacity>
           )}
           {!playlist.isDefault && (
@@ -300,7 +329,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
           renderItem={renderTrackItem}
           keyExtractor={(item) => item.id}
           onDragEnd={isDragEnabled ? handleDragEnd : undefined}
-          activationDistance={isDragEnabled ? 5 : 999}
+          activationDistance={isDragEnabled ? DRAG_ON_DISTANCE : DRAG_OFF_DISTANCE}
           containerStyle={styles.content}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
