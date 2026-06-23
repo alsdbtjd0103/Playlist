@@ -1,0 +1,32 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'expo.modules.audiodenoise'
+version = '1.0.0'
+
+android {
+  namespace = "expo.modules.audiodenoise"
+  compileSdkVersion safeExtGet("compileSdkVersion", 34)
+
+  defaultConfig {
+    minSdkVersion safeExtGet("minSdkVersion", 24)
+    targetSdkVersion safeExtGet("targetSdkVersion", 34)
+  }
+
+  kotlinOptions { jvmTarget = "17" }
+
+  sourceSets {
+    main {
+      // libDeepFilter(.so, JNI 심볼) — NATIVE_BINARIES.md 참고
+      jniLibs.srcDirs += 'src/main/jniLibs'
+    }
+  }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+}
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
