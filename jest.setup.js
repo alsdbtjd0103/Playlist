@@ -66,6 +66,19 @@ jest.mock('@expo/vector-icons', () => {
   );
 });
 
+// 백업/복원 네이티브 모듈 목 (헤드리스에서 import 시 깨지지 않게)
+jest.mock('react-native-zip-archive', () => ({
+  zip: jest.fn(async (_src, dest) => dest),
+  unzip: jest.fn(async (_src, dest) => dest),
+}));
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: null })),
+}));
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(async () => true),
+  shareAsync: jest.fn(async () => {}),
+}));
+
 // 각 테스트 전 저장소 초기화
 beforeEach(() => {
   const AsyncStorage = require('@react-native-async-storage/async-storage');
