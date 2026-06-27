@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sharing from 'expo-sharing';
 import { RootStackParamList, SongWithVersions, Version } from '../types';
 import {
   getSong,
@@ -182,6 +183,25 @@ export default function SongDetailScreen({ route, navigation }: Props) {
     } catch (error) {
       console.error('대표 버전 설정 실패:', error);
       Alert.alert('오류', '대표 버전 설정에 실패했습니다.');
+    }
+  };
+
+  const handleShareVersion = async (version: Version) => {
+    closeMenu();
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('공유 불가', '이 기기에서는 공유 기능을 사용할 수 없습니다.');
+        return;
+      }
+      await Sharing.shareAsync(version.storageUrl, {
+        mimeType: 'audio/m4a',
+        dialogTitle: `${song?.title ?? '녹음'} 내보내기`,
+        UTI: 'public.mpeg-4-audio',
+      });
+      logEvent('version_share', { songId: version.songId });
+    } catch (error) {
+      console.error('버전 공유 실패:', error);
+      Alert.alert('오류', '파일 공유에 실패했습니다.');
     }
   };
 
@@ -522,6 +542,14 @@ export default function SongDetailScreen({ route, navigation }: Props) {
                   <Text style={styles.menuItemText}>잡음 제거</Text>
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => menuState.version && handleShareVersion(menuState.version)}
+                testID="version-menu-share"
+              >
+                <Ionicons name="share-outline" size={20} color={colors.text} />
+                <Text style={styles.menuItemText}>공유 / 내보내기</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => menuState.version && handleDeleteVersion(menuState.version.id)}

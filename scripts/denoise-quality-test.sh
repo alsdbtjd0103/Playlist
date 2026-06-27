@@ -20,9 +20,10 @@
 # (a) 불합격이면 → B안(온디바이스) 보류, C안(Krisp BVC 서버 처리) 재검토.
 #
 # 의존성:
-#   - ffmpeg            (brew install ffmpeg)
-#   - deep-filter CLI   (pip install deepfilternet  또는 릴리스 바이너리)
-#       https://github.com/Rikorose/DeepFilterNet
+#   - 디코더: ffmpeg(있으면 우선) 또는 macOS 내장 afconvert(자동 폴백) — 둘 중 하나면 됨
+#   - deep-filter CLI   (릴리스 바이너리 권장: torch 불필요)
+#       https://github.com/Rikorose/DeepFilterNet/releases  (예: deep-filter-*-aarch64-apple-darwin)
+#       또는  pip install deepfilternet
 #
 set -euo pipefail
 
@@ -31,8 +32,50 @@ OUT_DIR="${2:-${IN_DIR}/out}"
 SR=48000   # DeepFilterNet 동작 표준: 48kHz mono
 
 # --- 의존성 확인 ---
-need() { command -v "$1" >/dev/null 2>&1 || { echo "❌ '$1' 가 필요합니다. ($2)"; exit 1; }; }
-need ffmpeg "brew install ffmpeg"
+# 디코드(m4a→48kHz mono wav)는 ffmpeg 우선, 없으면 macOS 내장 afconvert 로 폴백.
+# (이 맥은 Xcode CLT 구버전 탓에 brew ffmpeg 소스빌드가 깨져서 afconvert 경로가 기본)
+if command -v ffmpeg >/dev/null 2>&1; then
+  DECODER=ffmpeg
+elif command -v afconvert >/dev/null 2>&1; then
+  DECODER=afconvert
+else
+  echo "❌ ffmpeg 또는 afconvert(맥 내장) 중 하나가 필요합니다. (brew install ffmpeg)"
+  exit 1
+fi
+
+# 입력 오디오 → 48kHz mono wav
+to_48k_mono_wav() { # <src> <dest.wav>
+  if [ "$DECODER" = ffmpeg ]; then
+    ffmpeg -hide_banner -loglevel error -y -i "$1" -ac 1 -ar "$SR" "$2"
+  else
+    afconvert -f WAVE -d "LEI16@${SR}" -c 1 "$1" "$2"
+  fi
+}
+
+# 원본/정제 mono wav 2개를 좌/우 스테레오 1파일로 합치기 (A/B 비교용)
+# ffmpeg 있으면 amerge, 없으면 파이썬 stdlib(wave)로 인터리브.
+merge_lr() { # <left.wav> <right.wav> <out.wav>
+  if [ "$DECODER" = ffmpeg ]; then
+    ffmpeg -hide_banner -loglevel error -y -i "$1" -i "$2" \
+      -filter_complex "[0:a][1:a]amerge=inputs=2[a]" -map "[a]" -ac 2 "$3"
+  else
+    python3 - "$1" "$2" "$3" <<'PY'
+import sys, wave
+L, R, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
+l, r = wave.open(L, 'rb'), wave.open(R, 'rb')
+sw, fr = l.getsampwidth(), l.getframerate()
+ld, rd = l.readframes(l.getnframes()), r.readframes(r.getnframes())
+n = min(len(ld), len(rd))                      # 길이 다르면 짧은 쪽 기준
+out = bytearray()
+for i in range(0, n, sw):
+    out += ld[i:i+sw] + rd[i:i+sw]             # L, R 인터리브
+w = wave.open(OUT, 'wb')
+w.setnchannels(2); w.setsampwidth(sw); w.setframerate(fr)
+w.writeframes(bytes(out)); w.close()
+PY
+  fi
+}
+
 if ! command -v deep-filter >/dev/null 2>&1; then
   echo "❌ 'deep-filter' CLI 가 필요합니다."
   echo "   설치: pip install deepfilternet   또는   https://github.com/Rikorose/DeepFilterNet 릴리스 바이너리"
@@ -70,7 +113,7 @@ for src in "${samples[@]}"; do
 
   # 1) 원본 → 48kHz mono wav (DFN 입력 표준)
   orig_wav="$OUT_DIR/${base}_원본.wav"
-  ffmpeg -hide_banner -loglevel error -y -i "$src" -ac 1 -ar "$SR" "$orig_wav"
+  to_48k_mono_wav "$src" "$orig_wav"
 
   # 2) DeepFilterNet 처리 → 정제 wav
   #    deep-filter는 출력 디렉터리에 입력과 같은 이름으로 저장하므로 임시폴더 경유 후 리네임
@@ -83,9 +126,7 @@ for src in "${samples[@]}"; do
 
   # 3) (선택) 좌=원본 / 우=정제 스테레오로 합쳐 한 파일에서 A/B 비교
   ab_wav="$OUT_DIR/${base}_AB(L원본_R정제).wav"
-  ffmpeg -hide_banner -loglevel error -y \
-    -i "$orig_wav" -i "$clean_wav" \
-    -filter_complex "[0:a][1:a]amerge=inputs=2[a]" -map "[a]" -ac 2 "$ab_wav" || true
+  merge_lr "$orig_wav" "$clean_wav" "$ab_wav" || true
 
   echo "   ✅ ${base}_원본.wav / ${base}_정제.wav (+ AB 스테레오)"
 done

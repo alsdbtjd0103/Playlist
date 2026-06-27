@@ -29,6 +29,8 @@ import TrimEditorScreen from './screens/TrimEditorScreen';
 import DenoiseScreen from './screens/DenoiseScreen';
 import PlaylistsScreen from './screens/PlaylistsScreen';
 import PlaylistDetailScreen from './screens/PlaylistDetailScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import ExportScreen from './screens/ExportScreen';
 import { PlayerProvider } from './contexts/PlayerContext';
 import MiniPlayer from './components/MiniPlayer';
 import NowPlayingScreen from './components/NowPlayingScreen';
@@ -38,6 +40,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator<RootStackParamList>();
 const PlaylistStack = createNativeStackNavigator<RootStackParamList>();
+const SettingsStack = createNativeStackNavigator<RootStackParamList>();
 
 function HomeStackScreen({ bg }: { bg: string }) {
   return (
@@ -75,6 +78,23 @@ function PlaylistStackScreen({ bg }: { bg: string }) {
   );
 }
 
+function SettingsStackScreen({ bg }: { bg: string }) {
+  return (
+    <SettingsStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'fade',
+        animationDuration: 150,
+        contentStyle: { backgroundColor: bg },
+        gestureEnabled: false,
+      }}
+    >
+      <SettingsStack.Screen name="Settings" component={SettingsScreen} />
+      <SettingsStack.Screen name="Export" component={ExportScreen} />
+    </SettingsStack.Navigator>
+  );
+}
+
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, scheme } = useTheme();
@@ -107,7 +127,12 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             }
           };
 
-          const iconName = route.name === 'HomeTab' ? 'musical-notes' : 'albums';
+          const iconByRoute: Record<string, any> = {
+            HomeTab: 'musical-notes',
+            PlaylistTab: 'albums',
+            SettingsTab: 'settings-outline',
+          };
+          const iconName = iconByRoute[route.name] ?? 'ellipse';
           const tint = isFocused ? activeColor : colors.textMuted;
 
           return (
@@ -223,6 +248,9 @@ function AppInner() {
                 </Tab.Screen>
                 <Tab.Screen name="PlaylistTab" options={{ tabBarLabel: '플레이리스트' }}>
                   {() => <PlaylistStackScreen bg={colors.bg} />}
+                </Tab.Screen>
+                <Tab.Screen name="SettingsTab" options={{ tabBarLabel: '설정' }}>
+                  {() => <SettingsStackScreen bg={colors.bg} />}
                 </Tab.Screen>
               </Tab.Navigator>
               <NowPlayingScreen />

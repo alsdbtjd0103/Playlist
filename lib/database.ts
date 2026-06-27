@@ -151,7 +151,7 @@ export const getVersion = async (versionId: string): Promise<Version | null> => 
   return version || null;
 };
 
-const getAllVersions = async (): Promise<Version[]> => {
+export const getAllVersions = async (): Promise<Version[]> => {
   try {
     const versionsJson = await AsyncStorage.getItem(KEYS.VERSIONS);
     if (!versionsJson) return [];
@@ -251,7 +251,7 @@ export const createPlaylist = async (
   return playlistId;
 };
 
-const getAllPlaylists = async (): Promise<Playlist[]> => {
+export const getAllPlaylists = async (): Promise<Playlist[]> => {
   try {
     const playlistsJson = await AsyncStorage.getItem(KEYS.PLAYLISTS);
     if (!playlistsJson) return [];
@@ -314,7 +314,7 @@ export const addToPlaylist = async (
   return itemId;
 };
 
-const getAllPlaylistItems = async (): Promise<PlaylistItem[]> => {
+export const getAllPlaylistItems = async (): Promise<PlaylistItem[]> => {
   try {
     const itemsJson = await AsyncStorage.getItem(KEYS.PLAYLIST_ITEMS);
     if (!itemsJson) return [];
@@ -433,6 +433,50 @@ export const ensureDefaultPlaylist = async (): Promise<string> => {
   
   return playlistId;
 };
+
+// === 백업/복원 ===
+
+export interface BackupData {
+  songs: Song[];
+  versions: Version[];
+  playlists: Playlist[];
+  playlistItems: PlaylistItem[];
+}
+
+export const getBackupData = async (): Promise<BackupData> => ({
+  songs: await getAllSongs(),
+  versions: await getAllVersions(),
+  playlists: await getAllPlaylists(),
+  playlistItems: await getAllPlaylistItems(),
+});
+
+export interface MergeCounts { added: number; skipped: number; }
+export interface MergeResult {
+  songs: MergeCounts; versions: MergeCounts; playlists: MergeCounts; playlistItems: MergeCounts;
+}
+
+// 원시 JSON 레벨에서 id 기준 병합(기존 유지, 중복 skip). Date 변환 불필요.
+const mergeCollection = async (key: string, incoming: any[]): Promise<MergeCounts> => {
+  const json = await AsyncStorage.getItem(key);
+  const existing: any[] = json ? JSON.parse(json) : [];
+  const ids = new Set(existing.map((r) => r.id));
+  let added = 0, skipped = 0;
+  for (const rec of incoming ?? []) {
+    if (ids.has(rec.id)) { skipped++; continue; }
+    existing.push(rec); ids.add(rec.id); added++;
+  }
+  await AsyncStorage.setItem(key, JSON.stringify(existing));
+  return { added, skipped };
+};
+
+export const mergeImport = async (data: {
+  songs: any[]; versions: any[]; playlists: any[]; playlistItems: any[];
+}): Promise<MergeResult> => ({
+  songs: await mergeCollection(KEYS.SONGS, data.songs),
+  versions: await mergeCollection(KEYS.VERSIONS, data.versions),
+  playlists: await mergeCollection(KEYS.PLAYLISTS, data.playlists),
+  playlistItems: await mergeCollection(KEYS.PLAYLIST_ITEMS, data.playlistItems),
+});
 
 // 대표곡 플레이리스트를 현재 대표 버전들과 동기화
 export const syncDefaultPlaylist = async (): Promise<void> => {
