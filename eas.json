@@ -21,6 +21,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "applicationId": "com.playlist.app",
+        "track": "internal"
+      }
+    }
   }
 }
