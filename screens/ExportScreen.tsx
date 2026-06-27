@@ -118,7 +118,7 @@ export default function ExportScreen({ navigation }: Props) {
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {picker === 'playlist' ? '플레이리스트 선택' : picker === 'songs' ? '곡 선택 (여러 개)' : '노래 선택'}
+                {picker === 'playlist' ? '플레이리스트 선택' : picker === 'songs' ? '여러 곡 선택' : '노래 선택'}
               </Text>
               <TouchableOpacity onPress={closePicker} testID="picker-close">
                 <Ionicons name="close" size={24} color={colors.text} />

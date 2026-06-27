@@ -35,7 +35,7 @@ export default function SettingsScreen({ navigation }: Props) {
       const skipped = r.songs.skipped + r.versions.skipped + r.playlists.skipped + r.playlistItems.skipped;
       Alert.alert(
         '복원 완료',
-        `곡 ${r.songs.added}개 · 버전 ${r.versions.added}개 복원 (중복 ${skipped}개 건너뜀).`
+        `곡 ${r.songs.added}개 · 버전 ${r.versions.added}개를 복원했어요. 중복 ${skipped}개는 건너뛰었어요.`
       );
     } catch (e: any) {
       Alert.alert('복원 실패', e?.message ?? '백업을 복원하지 못했습니다.');
@@ -61,7 +61,7 @@ export default function SettingsScreen({ navigation }: Props) {
         >
           <Ionicons name="cloud-upload-outline" size={22} color={colors.text} style={styles.rowIcon} />
           <View style={styles.rowTextWrap}>
-            <Text style={styles.rowLabel}>내보내기 (백업 만들기)</Text>
+            <Text style={styles.rowLabel}>내보내기</Text>
             <Text style={styles.rowDesc}>곡·버전·플레이리스트를 zip으로</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -75,8 +75,8 @@ export default function SettingsScreen({ navigation }: Props) {
         >
           <Ionicons name="cloud-download-outline" size={22} color={colors.text} style={styles.rowIcon} />
           <View style={styles.rowTextWrap}>
-            <Text style={styles.rowLabel}>가져오기 (백업 복원)</Text>
-            <Text style={styles.rowDesc}>백업 zip을 선택해 복원 (중복은 건너뜀)</Text>
+            <Text style={styles.rowLabel}>가져오기</Text>
+            <Text style={styles.rowDesc}>백업 zip을 선택해 복원</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
