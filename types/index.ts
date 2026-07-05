@@ -23,6 +23,7 @@ export interface Version {
   memo?: string;
   waveform?: number[];
   trim?: { start: number; end: number };
+  cuts?: { start: number; end: number }[];
   editedFrom?: string;
 }
 
