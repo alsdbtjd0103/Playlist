@@ -35,6 +35,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import Waveform from '../components/Waveform';
 import { logEvent, logScreen } from '../lib/analytics';
 import { isNativeDenoiseAvailable } from '../lib/nativeDenoise';
+import { isAudioEditAvailable, renderCutsToFile } from '../lib/nativeAudioEdit';
+import { getEffectiveCuts } from '../lib/trim';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SongDetail'>;
 
@@ -193,7 +195,19 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         Alert.alert('공유 불가', '이 기기에서는 공유 기능을 사용할 수 없습니다.');
         return;
       }
-      await Sharing.shareAsync(version.storageUrl, {
+      // 비파괴 cuts가 있고 네이티브 렌더 가능하면 실제 잘린 파일로 공유(편집 반영)
+      let shareUri = version.storageUrl;
+      const dur = version.duration || 0;
+      const cuts = getEffectiveCuts(version, dur);
+      if (cuts.length > 0 && dur > 0 && isAudioEditAvailable()) {
+        try {
+          const rendered = await renderCutsToFile(version.storageUrl, cuts, dur, version.songId);
+          shareUri = rendered.uri;
+        } catch (e) {
+          console.error('공유용 렌더 실패, 원본 공유로 대체:', e);
+        }
+      }
+      await Sharing.shareAsync(shareUri, {
         mimeType: 'audio/m4a',
         dialogTitle: `${song?.title ?? '녹음'} 내보내기`,
         UTI: 'public.mpeg-4-audio',

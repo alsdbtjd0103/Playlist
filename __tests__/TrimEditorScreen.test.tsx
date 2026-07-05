@@ -10,11 +10,17 @@ jest.mock('../lib/database', () => ({
   getVersion: jest.fn(),
   applyCutsToVersion: jest.fn(async () => {}),
   createEditedVersion: jest.fn(async () => 'new-v'),
+  addVersion: jest.fn(async () => 'rendered-v'),
+}));
+jest.mock('../lib/nativeAudioEdit', () => ({
+  isAudioEditAvailable: jest.fn(() => false),
+  renderCutsToFile: jest.fn(async () => ({ uri: 'file:///s1/edit.m4a', duration: 7 })),
 }));
 
 import { ThemeProvider } from '../contexts/ThemeContext';
 import TrimEditorScreen from '../screens/TrimEditorScreen';
-import { getVersion, createEditedVersion, applyCutsToVersion } from '../lib/database';
+import { getVersion, createEditedVersion, applyCutsToVersion, addVersion } from '../lib/database';
+import { isAudioEditAvailable, renderCutsToFile } from '../lib/nativeAudioEdit';
 
 const nav = { goBack: jest.fn(), navigate: jest.fn() } as any;
 const route = { params: { versionId: 'v1' } } as any;
@@ -63,6 +69,27 @@ it('구간 추가 후 선택 삭제하면 다시 0개', async () => {
   await act(async () => { fireEvent.press(r.getByTestId('trim-delete-cut-button')); });
   await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
   await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', []));
+});
+
+it('네이티브 미가용이면 실제로 잘라 저장 버튼이 없다', async () => {
+  (isAudioEditAvailable as jest.Mock).mockReturnValue(false);
+  const r = renderScreen();
+  await waitFor(() => r.getByTestId('trim-add-cut-button'));
+  await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
+  await waitFor(() => r.getByTestId('cut-0-region'));
+  expect(r.queryByTestId('trim-render-button')).toBeNull();
+});
+
+it('네이티브 가용 + cut 있으면 렌더 버튼 → renderCutsToFile + addVersion 호출', async () => {
+  (isAudioEditAvailable as jest.Mock).mockReturnValue(true);
+  const r = renderScreen();
+  await waitFor(() => r.getByTestId('trim-add-cut-button'));
+  await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
+  await waitFor(() => r.getByTestId('trim-render-button'));
+  await act(async () => { fireEvent.press(r.getByTestId('trim-render-button')); });
+  await waitFor(() => expect(renderCutsToFile).toHaveBeenCalled());
+  expect(addVersion).toHaveBeenCalled();
+  expect(nav.goBack).toHaveBeenCalled();
 });
 
 it('덮어쓰기 확인 Alert에서 destructive 버튼 누르면 applyCutsToVersion 호출', async () => {

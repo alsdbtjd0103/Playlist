@@ -5,7 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { RootStackParamList, Version } from '../types';
-import { getVersion, applyCutsToVersion, createEditedVersion } from '../lib/database';
+import { getVersion, applyCutsToVersion, createEditedVersion, addVersion } from '../lib/database';
 import {
   TrimRange,
   getEffectiveCuts,
@@ -13,6 +13,7 @@ import {
   editedDuration,
   nextKeepStart,
 } from '../lib/trim';
+import { isAudioEditAvailable, renderCutsToFile } from '../lib/nativeAudioEdit';
 import { WaveformView } from '../components/WaveformView';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
@@ -39,6 +40,7 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
   const player = useAudioPlayer(version ? { uri: version.storageUrl } : null);
   const status = useAudioPlayerStatus(player);
   const previewingRef = useRef(false);
+  const nativeAvailable = useMemo(() => isAudioEditAvailable(), []);
 
   const duration = version?.duration || status.duration || 0;
 
@@ -124,6 +126,35 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
   };
 
   const handleSave = () => finish('new');
+
+  // 실제로 잘라 새 파일 렌더 후 새 버전 저장(네이티브)
+  const handleRenderSave = async () => {
+    if (!version) return;
+    const safe = normalizeCuts(cuts, duration);
+    if (safe.length === 0) {
+      Alert.alert('알림', '잘라낼 구간을 먼저 추가해주세요.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { uri, duration: outDur } = await renderCutsToFile(
+        version.storageUrl,
+        safe,
+        duration,
+        version.songId
+      );
+      const fileName = uri.split('/').pop() || `${version.songId}_edit.m4a`;
+      await addVersion(version.songId, fileName, uri, version.rating, outDur, version.memo, {
+        waveform: version.waveform,
+      });
+      navigation.goBack();
+    } catch {
+      Alert.alert('오류', '렌더링에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleOverwrite = () => {
     Alert.alert('원본 덮어쓰기', '되돌릴 수 없어요. 계속할까요?', [
       { text: '취소', style: 'cancel' },
@@ -189,6 +220,18 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
+      {nativeAvailable && cuts.length > 0 && (
+        <TouchableOpacity
+          style={[styles.renderButton, saving && styles.disabled]}
+          onPress={handleRenderSave}
+          disabled={saving}
+          testID="trim-render-button"
+        >
+          <Ionicons name="save-outline" size={20} color={colors.onAccent} />
+          <Text style={styles.renderButtonText}>실제로 잘라 새 버전 저장</Text>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.saveRow}>
         <TouchableOpacity
           style={[styles.overwriteButton, saving && styles.disabled]}
@@ -251,6 +294,18 @@ const makeStyles = (colors: ColorTokens) =>
       borderRadius: borderRadius.full,
     },
     previewText: { ...typography.body, fontWeight: '600', color: colors.onAccent },
+    renderButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.accent,
+      paddingVertical: spacing.md,
+      borderRadius: borderRadius.md,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.md,
+    },
+    renderButtonText: { ...typography.body, fontWeight: '700', color: colors.onAccent },
     saveRow: { flexDirection: 'row', gap: spacing.md, margin: spacing.lg },
     overwriteButton: {
       flex: 1,

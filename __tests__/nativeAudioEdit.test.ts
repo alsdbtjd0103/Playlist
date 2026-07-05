@@ -36,7 +36,9 @@ describe('nativeAudioEdit', () => {
   });
 
   it('cuts를 keepSegments로 변환해 네이티브 renderCuts 호출', async () => {
-    const renderCuts = jest.fn(async () => ({ uri: 'file:///out.m4a', duration: 7 }));
+    const renderCuts = jest.fn(
+      async (_input: string, _keep: any, _out: string) => ({ uri: 'file:///out.m4a', duration: 7 })
+    );
     mockGet.mockReturnValue({ renderCuts });
     expect(isAudioEditAvailable()).toBe(true);
 
