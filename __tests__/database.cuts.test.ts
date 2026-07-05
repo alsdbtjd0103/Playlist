@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { applyCutsToVersion, createEditedVersion, getVersion } from '../lib/database';
+import { editedDuration } from '../lib/trim';
 
 beforeEach(async () => {
   await AsyncStorage.clear();
@@ -26,15 +27,18 @@ describe('applyCutsToVersion', () => {
 });
 
 describe('createEditedVersion', () => {
-  it('원본 파일 참조 + cuts/editedFrom + 편집 후 길이', async () => {
+  it('원본 파일 참조 + cuts/editedFrom + 원본 길이 유지(편집 길이는 파생)', async () => {
     await seedVersion();
-    const cuts = [{ start: 2, end: 5 }]; // 10초 중 3초 삭제 → 7초
+    const cuts = [{ start: 2, end: 5 }]; // 10초 중 3초 삭제 → 편집 후 7초
     const newId = await createEditedVersion('v1', cuts);
     const nv = await getVersion(newId);
     expect(nv?.storageUrl).toBe('file:///a.m4a');
     expect(nv?.cuts).toEqual(cuts);
     expect(nv?.editedFrom).toBe('v1');
-    expect(nv?.duration).toBeCloseTo(7);
+    // 비파괴이므로 duration은 원본(10) 유지 — 재생/시크 정합성
+    expect(nv?.duration).toBeCloseTo(10);
+    // 편집 후 길이는 파생 계산
+    expect(editedDuration(nv!.cuts!, nv!.duration!)).toBeCloseTo(7);
     expect(nv?.waveform).toEqual([1, 2, 3]);
   });
 

@@ -9,7 +9,16 @@ import TrackPlayer, {
   AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
 import { Song, Version } from '../types';
-import { isPastTrimEnd } from '../lib/trim';
+import { getEffectiveCuts, nextKeepStart } from '../lib/trim';
+
+/** 버전의 첫 재생 시작 지점(첫 남길 구간의 시작). cuts/레거시 trim 모두 대응. */
+const playStartOf = (version: Version): number => {
+  const dur = version.duration || 0;
+  if (dur <= 0) return 0;
+  const cuts = getEffectiveCuts(version, dur);
+  if (cuts.length === 0) return 0;
+  return nextKeepStart(0, cuts, dur) ?? 0;
+};
 
 interface PlayingTrack {
   song: Song;
@@ -140,7 +149,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         if (newTrack) {
           setCurrentTrackState(newTrack);
           setPlaylistState(prev => prev ? { ...prev, currentIndex: event.index! } : null);
-          if (newTrack.version.trim) { await TrackPlayer.seekTo(newTrack.version.trim.start); }
+          const startAt = playStartOf(newTrack.version);
+          if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
         }
       }
     });
@@ -167,7 +177,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         duration: track.version.duration,
       });
       await TrackPlayer.play();
-      if (track.version.trim) { await TrackPlayer.seekTo(track.version.trim.start); }
+      const startAt = playStartOf(track.version);
+      if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
       setCurrentTrackState(track);
     } catch (error) {
       console.error('트랙 설정 실패:', error);
@@ -220,8 +231,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       await TrackPlayer.add(tracks);
       await TrackPlayer.skip(startIndex);
       await TrackPlayer.play();
-      const startTrim = items[startIndex]?.version.trim;
-      if (startTrim) { await TrackPlayer.seekTo(startTrim.start); }
+      const startItem = items[startIndex];
+      if (startItem) {
+        const startAt = playStartOf(startItem.version);
+        if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
+      }
 
       setPlaylistState({
         items,
@@ -248,18 +262,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [playlistState]);
 
-  // trim.end 도달 시 정지/다음 곡
+  // 재생 중 cut 구간 건너뛰기 + 마지막 남길 구간 끝 도달 시 정지/다음 곡
   useEffect(() => {
-    const trim = currentTrack?.version.trim;
-    if (!trim || !isPlaying) return;
-    if (isPastTrimEnd(progress.position, trim)) {
-      if (trimEndHandledRef.current === currentTrack.version.id) return; // already handled for this track
-      trimEndHandledRef.current = currentTrack.version.id;
+    const version = currentTrack?.version;
+    if (!version || !isPlaying) return;
+    const dur = version.duration || 0;
+    if (dur <= 0) return;
+    const cuts = getEffectiveCuts(version, dur);
+    if (cuts.length === 0) return;
+    const nxt = nextKeepStart(progress.position, cuts, dur);
+    if (nxt === null) {
+      // 마지막 남길 구간의 끝 → 종료 처리
+      if (trimEndHandledRef.current === version.id) return; // already handled for this track
+      trimEndHandledRef.current = version.id;
       if (playlistState && playlistState.items.length > 1) {
         playNext();
       } else {
         TrackPlayer.pause();
       }
+    } else if (nxt > progress.position + 0.05) {
+      // cut 진입 → 다음 남길 지점으로 건너뛰기
+      TrackPlayer.seekTo(nxt);
     }
   }, [progress.position, currentTrack, isPlaying, playlistState, playNext]);
 

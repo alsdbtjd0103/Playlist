@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Song, Version, Playlist, PlaylistItem } from '@/types';
-import { editedDuration } from './trim';
 
 // AsyncStorage 키 상수
 const KEYS = {
@@ -256,13 +255,14 @@ export const createEditedVersion = async (
 ): Promise<string> => {
   const source = await getVersion(sourceVersionId);
   if (!source) throw new Error('원본 버전을 찾을 수 없습니다.');
-  const dur = source.duration ?? 0;
+  // 비파괴: 원본 파일을 그대로 참조하므로 duration은 원본 길이를 유지한다.
+  // (편집 후 길이는 editedDuration(cuts, duration)으로 파생 계산)
   return addVersion(
     source.songId,
     source.fileName,
     source.storageUrl,
     source.rating,
-    editedDuration(cuts, dur),
+    source.duration,
     source.memo,
     { waveform: source.waveform, cuts, editedFrom: source.id }
   );
