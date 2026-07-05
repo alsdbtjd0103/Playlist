@@ -3,6 +3,9 @@
 dist/
 web-build/
 
+# 로컬 모듈 빌드 출력
+modules/*/android/build/
+
 # Native
 *.orig.*
 *.jks
