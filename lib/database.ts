@@ -111,7 +111,12 @@ export const addVersion = async (
   rating: number,
   duration?: number,
   memo?: string,
-  extra?: { waveform?: number[]; trim?: { start: number; end: number }; editedFrom?: string }
+  extra?: {
+    waveform?: number[];
+    trim?: { start: number; end: number };
+    cuts?: { start: number; end: number }[];
+    editedFrom?: string;
+  }
 ): Promise<string> => {
   const now = new Date();
   const versionId = generateId();
@@ -127,6 +132,7 @@ export const addVersion = async (
     memo: memo || undefined,
     waveform: extra?.waveform,
     trim: extra?.trim,
+    cuts: extra?.cuts,
     editedFrom: extra?.editedFrom,
   };
 
@@ -224,6 +230,41 @@ export const createTrimmedVersion = async (
     range.end - range.start,
     source.memo,
     { waveform: source.waveform, trim: range, editedFrom: source.id }
+  );
+};
+
+// === 멀티 구간(cuts) 편집 — 비파괴 ===
+
+/** 버전에 삭제 구간(cuts)을 비파괴로 저장(원본 파일 그대로). */
+export const applyCutsToVersion = async (
+  versionId: string,
+  cuts: { start: number; end: number }[]
+): Promise<void> => {
+  const versions = await getAllVersions();
+  const idx = versions.findIndex((v) => v.id === versionId);
+  if (idx !== -1) {
+    versions[idx].cuts = cuts;
+    await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
+  }
+};
+
+/** cuts 메타를 가진 새 버전 생성(같은 원본 파일 참조, 비파괴). */
+export const createEditedVersion = async (
+  sourceVersionId: string,
+  cuts: { start: number; end: number }[]
+): Promise<string> => {
+  const source = await getVersion(sourceVersionId);
+  if (!source) throw new Error('원본 버전을 찾을 수 없습니다.');
+  // 비파괴: 원본 파일을 그대로 참조하므로 duration은 원본 길이를 유지한다.
+  // (편집 후 길이는 editedDuration(cuts, duration)으로 파생 계산)
+  return addVersion(
+    source.songId,
+    source.fileName,
+    source.storageUrl,
+    source.rating,
+    source.duration,
+    source.memo,
+    { waveform: source.waveform, cuts, editedFrom: source.id }
   );
 };
 
