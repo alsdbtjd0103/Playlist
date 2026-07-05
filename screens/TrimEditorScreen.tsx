@@ -5,13 +5,21 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { RootStackParamList, Version } from '../types';
-import { getVersion, applyTrimToVersion, createTrimmedVersion } from '../lib/database';
-import { clampTrimRange, trimmedDuration, isPastTrimEnd, TrimRange } from '../lib/trim';
+import { getVersion, applyCutsToVersion, createEditedVersion } from '../lib/database';
+import {
+  TrimRange,
+  getEffectiveCuts,
+  normalizeCuts,
+  editedDuration,
+  nextKeepStart,
+} from '../lib/trim';
 import { WaveformView } from '../components/WaveformView';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TrimEditor'>;
+
+const DEFAULT_CUT = 2; // 새 구간 기본 길이(초)
 
 const fmt = (s: number) => {
   const m = Math.floor(s / 60);
@@ -24,12 +32,15 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { versionId } = route.params;
   const [version, setVersion] = useState<Version | null>(null);
-  const [range, setRange] = useState<TrimRange>({ start: 0, end: 0 });
+  const [cuts, setCuts] = useState<TrimRange[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   const player = useAudioPlayer(version ? { uri: version.storageUrl } : null);
   const status = useAudioPlayerStatus(player);
   const previewingRef = useRef(false);
+
+  const duration = version?.duration || status.duration || 0;
 
   useEffect(() => {
     (async () => {
@@ -40,26 +51,30 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
         return;
       }
       setVersion(v);
-      const dur = v.duration ?? 0;
-      setRange(v.trim ?? { start: 0, end: dur });
+      const dur = v.duration || 0;
+      if (dur > 0) setCuts(getEffectiveCuts(v, dur));
     })();
   }, [versionId]);
 
+  // duration을 늦게 알게 된 경우(레거시 trim → cuts) 보정
   useEffect(() => {
-    if (version && !version.trim && range.end === 0 && status.duration > 0) {
-      setRange({ start: 0, end: status.duration });
+    if (version && cuts.length === 0 && duration > 0) {
+      const eff = getEffectiveCuts(version, duration);
+      if (eff.length) setCuts(eff);
     }
-  }, [version, status.duration, range.end]);
+  }, [version, duration]);
 
-  const duration = version?.duration ?? status.duration ?? 0;
-
-  // 구간 끝 도달 시 미리듣기 정지
+  // 미리듣기: cut 구간을 건너뛰며 재생
   useEffect(() => {
-    if (previewingRef.current && isPastTrimEnd(status.currentTime, range)) {
+    if (!previewingRef.current) return;
+    const nxt = nextKeepStart(status.currentTime, cuts, duration);
+    if (nxt === null) {
       player.pause();
       previewingRef.current = false;
+    } else if (nxt > status.currentTime + 0.05) {
+      player.seekTo(nxt);
     }
-  }, [status.currentTime, range]);
+  }, [status.currentTime, cuts, duration]);
 
   const handlePreview = async () => {
     if (status.playing) {
@@ -67,20 +82,38 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
       previewingRef.current = false;
       return;
     }
-    await player.seekTo(range.start);
+    const start = nextKeepStart(0, cuts, duration) ?? 0;
+    await player.seekTo(start);
     previewingRef.current = true;
     player.play();
+  };
+
+  const handleAddCut = () => {
+    const at = status.currentTime > 0 ? status.currentTime : 0;
+    const start = Math.max(0, Math.min(at, Math.max(0, duration - DEFAULT_CUT)));
+    const end = Math.min(duration, start + DEFAULT_CUT);
+    if (end - start < 0.1) return;
+    const next = normalizeCuts([...cuts, { start, end }], duration);
+    setCuts(next);
+    const idx = next.findIndex((c) => start >= c.start - 1e-3 && start <= c.end + 1e-3);
+    setSelectedIndex(idx === -1 ? null : idx);
+  };
+
+  const handleDeleteCut = () => {
+    if (selectedIndex === null) return;
+    setCuts(cuts.filter((_, i) => i !== selectedIndex));
+    setSelectedIndex(null);
   };
 
   const finish = async (mode: 'new' | 'overwrite') => {
     if (!version) return;
     setSaving(true);
     try {
-      const safe = clampTrimRange(range, duration);
+      const safe = normalizeCuts(cuts, duration);
       if (mode === 'overwrite') {
-        await applyTrimToVersion(version.id, safe);
+        await applyCutsToVersion(version.id, safe);
       } else {
-        await createTrimmedVersion(version.id, safe);
+        await createEditedVersion(version.id, safe);
       }
       navigation.goBack();
     } catch {
@@ -90,10 +123,7 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleSave = () => {
-    finish('new');
-  };
-
+  const handleSave = () => finish('new');
   const handleOverwrite = () => {
     Alert.alert('원본 덮어쓰기', '되돌릴 수 없어요. 계속할까요?', [
       { text: '취소', style: 'cancel' },
@@ -109,6 +139,8 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
     );
   }
 
+  const remaining = editedDuration(cuts, duration);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -120,26 +152,38 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.lenText}>{fmt(trimmedDuration(range))} 선택됨</Text>
+        <Text style={styles.lenText}>
+          {cuts.length > 0 ? `${cuts.length}개 구간 잘라냄 · 남은 길이 ${fmt(remaining)}` : `잘라낼 구간 없음 · ${fmt(duration)}`}
+        </Text>
         <WaveformView
           samples={version.waveform ?? []}
           duration={duration}
-          range={range}
+          cuts={cuts}
+          onChangeCuts={setCuts}
+          selectedIndex={selectedIndex}
+          onSelectCut={setSelectedIndex}
           playhead={status.playing ? status.currentTime : undefined}
-          onChangeRange={setRange}
           width={340}
           height={140}
         />
-        <View style={styles.timeRow}>
-          <Text style={styles.timeText}>{fmt(range.start)}</Text>
-          <Text style={styles.timeText}>{fmt(range.end)}</Text>
+
+        <View style={styles.editRow}>
+          <TouchableOpacity style={styles.editButton} onPress={handleAddCut} testID="trim-add-cut-button">
+            <Ionicons name="cut-outline" size={20} color={colors.text} />
+            <Text style={styles.editButtonText}>구간 추가</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.editButton, selectedIndex === null && styles.disabled]}
+            onPress={handleDeleteCut}
+            disabled={selectedIndex === null}
+            testID="trim-delete-cut-button"
+          >
+            <Ionicons name="trash-outline" size={20} color={colors.danger} />
+            <Text style={[styles.editButtonText, { color: colors.danger }]}>선택 구간 삭제</Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.previewButton}
-          onPress={handlePreview}
-          testID="trim-preview-button"
-        >
+        <TouchableOpacity style={styles.previewButton} onPress={handlePreview} testID="trim-preview-button">
           <Ionicons name={status.playing ? 'pause' : 'play'} size={28} color={colors.onAccent} />
           <Text style={styles.previewText}>{status.playing ? '일시정지' : '구간 미리듣기'}</Text>
         </TouchableOpacity>
@@ -171,59 +215,58 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
   );
 }
 
-const makeStyles = (colors: ColorTokens) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  headerTitle: { ...typography.h3, color: colors.text },
-  headerSpacer: { width: 28 },
-  body: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  lenText: { ...typography.body, color: colors.textMuted },
-  timeRow: { flexDirection: 'row', justifyContent: 'space-between', width: 340 },
-  timeText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-  previewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.accentStrong,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.full,
-    marginTop: spacing.lg,
-  },
-  previewText: { ...typography.body, fontWeight: '600', color: colors.onAccent },
-  saveRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    margin: spacing.lg,
-  },
-  overwriteButton: {
-    flex: 1,
-    backgroundColor: colors.surfaceAlt,
-    paddingVertical: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  overwriteButtonText: { ...typography.body, fontWeight: '600', color: colors.danger },
-  saveButton: {
-    flex: 1,
-    backgroundColor: colors.accentStrong,
-    paddingVertical: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  saveText: { ...typography.body, fontWeight: '700', color: colors.onAccent },
-  disabled: { opacity: 0.5 },
-});
+const makeStyles = (colors: ColorTokens) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    headerTitle: { ...typography.h3, color: colors.text },
+    headerSpacer: { width: 28 },
+    body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.lg, paddingHorizontal: spacing.lg },
+    lenText: { ...typography.body, color: colors.textMuted },
+    editRow: { flexDirection: 'row', gap: spacing.md },
+    editButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.full,
+    },
+    editButtonText: { ...typography.bodySmall, fontWeight: '600', color: colors.text },
+    previewButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.accentStrong,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.md,
+      borderRadius: borderRadius.full,
+    },
+    previewText: { ...typography.body, fontWeight: '600', color: colors.onAccent },
+    saveRow: { flexDirection: 'row', gap: spacing.md, margin: spacing.lg },
+    overwriteButton: {
+      flex: 1,
+      backgroundColor: colors.surfaceAlt,
+      paddingVertical: spacing.lg,
+      borderRadius: borderRadius.md,
+      alignItems: 'center',
+    },
+    overwriteButtonText: { ...typography.body, fontWeight: '600', color: colors.danger },
+    saveButton: {
+      flex: 1,
+      backgroundColor: colors.accentStrong,
+      paddingVertical: spacing.lg,
+      borderRadius: borderRadius.md,
+      alignItems: 'center',
+    },
+    saveText: { ...typography.body, fontWeight: '700', color: colors.onAccent },
+    disabled: { opacity: 0.5 },
+  });
