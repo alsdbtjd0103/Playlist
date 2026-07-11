@@ -9,6 +9,7 @@ export interface Song {
   artworkUrl?: string;
   itunesTrackId?: number;
   previewUrl?: string;
+  myKey?: number; // 내 키 (반음, 원키=0, 미설정=undefined)
 }
 
 // 녹음 버전
@@ -25,6 +26,7 @@ export interface Version {
   trim?: { start: number; end: number };
   cuts?: { start: number; end: number }[];
   editedFrom?: string;
+  key?: number; // 이 녹음의 키 (반음, 원키=0, 미설정=undefined)
 }
 
 // 플레이리스트

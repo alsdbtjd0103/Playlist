@@ -33,7 +33,7 @@ interface Version { /* ... */ key?: number; }  // 이 녹음의 키
 ## 컴포넌트
 
 - **KeyBadge** (`components/KeyBadge.tsx`): `value?: number`. `formatKey`가 `null`이면 렌더 안 함. 음표 아이콘(`musical-note`) + 라벨의 작은 pill. 원키/양수/음수에 따라 색 톤 구분(원키=중립, 그 외=accent).
-- **KeyPickerModal** (`components/KeyPickerModal.tsx`): `−`/`+` 스텝퍼(범위 클램프) + "원키로" 버튼 + 저장/취소. 곡 키·버전 키 편집에 공용. `initialValue`, `onSave(key)`.
+- **KeyPickerModal** (`components/KeyPickerModal.tsx`): `−`/`+` 스텝퍼(범위 클램프) + "기본값"(0으로 리셋) 버튼 + 저장/취소. 곡 키·버전 키 편집에 공용. `initialValue`, `onSave(key)`. 타이틀은 곡="음정", 버전="이 녹음의 음정".
 
 ## 데이터베이스 (lib/database.ts)
 

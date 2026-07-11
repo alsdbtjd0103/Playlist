@@ -15,14 +15,17 @@ import { useRecording } from '../hooks/useRecording';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
+import { formatKey, clampKey, KEY_MIN, KEY_MAX } from '../lib/keyLabel';
 
 interface RecorderModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number) => Promise<void>;
+  onSave: (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number, key?: number) => Promise<void>;
+  /** 이 곡의 현재 키 — 스텝퍼 기본값으로 사용(없으면 원키=0). */
+  defaultKey?: number;
 }
 
-export default function RecorderModal({ visible, onClose, onSave }: RecorderModalProps) {
+export default function RecorderModal({ visible, onClose, onSave, defaultKey }: RecorderModalProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {
@@ -45,7 +48,13 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
 
   const [rating, setRating] = useState(3);
   const [memo, setMemo] = useState('');
+  const [key, setKey] = useState(0);
   const [saving, setSaving] = useState(false);
+
+  // 모달이 열릴 때마다 곡의 현재 키를 스텝퍼 기본값으로 세팅
+  useEffect(() => {
+    if (visible) setKey(clampKey(defaultKey ?? 0));
+  }, [visible, defaultKey]);
 
   // 녹음 시작 시 플레이어 중지
   const handleStartRecording = async () => {
@@ -66,7 +75,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
 
     setSaving(true);
     try {
-      await onSave(audioUri, rating, memo.trim() || undefined, waveform, recordingTime);
+      await onSave(audioUri, rating, memo.trim() || undefined, waveform, recordingTime, key);
       handleClose();
     } catch (error) {
       console.error('저장 실패:', error);
@@ -80,6 +89,7 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
     resetRecording();
     setRating(3);
     setMemo('');
+    setKey(clampKey(defaultKey ?? 0));
     onClose();
   };
 
@@ -212,6 +222,27 @@ export default function RecorderModal({ visible, onClose, onSave }: RecorderModa
                         />
                       </TouchableOpacity>
                     ))}
+                  </View>
+                </View>
+
+                <View style={styles.keySection}>
+                  <Text style={styles.keyLabel}>키</Text>
+                  <View style={styles.keyStepper}>
+                    <TouchableOpacity
+                      style={[styles.keyStepBtn, key <= KEY_MIN && styles.keyStepBtnDisabled]}
+                      onPress={() => setKey((v) => clampKey(v - 1))}
+                      disabled={key <= KEY_MIN || saving}
+                    >
+                      <Ionicons name="remove" size={22} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.keyValue}>{formatKey(key)}</Text>
+                    <TouchableOpacity
+                      style={[styles.keyStepBtn, key >= KEY_MAX && styles.keyStepBtnDisabled]}
+                      onPress={() => setKey((v) => clampKey(v + 1))}
+                      disabled={key >= KEY_MAX || saving}
+                    >
+                      <Ionicons name="add" size={22} color={colors.text} />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -396,6 +427,43 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   },
   starButton: {
     padding: spacing.xs,
+  },
+  keySection: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  keyLabel: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  keyStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  keyStepBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  keyStepBtnDisabled: {
+    opacity: 0.4,
+  },
+  keyValue: {
+    fontFamily: fontFamily.bold,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    minWidth: 64,
+    textAlign: 'center',
   },
   memoSection: {
     width: '100%',

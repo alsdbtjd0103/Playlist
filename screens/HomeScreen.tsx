@@ -23,6 +23,7 @@ import ScreenHeader from "../components/ScreenHeader";
 import Waveform from "../components/Waveform";
 import { SongSearchModal } from '../components/SongSearchModal';
 import { AlbumArt } from '../components/AlbumArt';
+import KeyBadge from "../components/KeyBadge";
 import { logScreen } from "../lib/analytics";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
@@ -61,12 +62,15 @@ const SongItem = ({
             </Text>
           )}
         </View>
-        {displayVersion && (
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={12} color={colors.star} />
-            <Text style={styles.ratingText}>{displayVersion.rating}</Text>
-          </View>
-        )}
+        <View style={styles.metaRow}>
+          <KeyBadge value={item.myKey} />
+          {displayVersion && (
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={12} color={colors.star} />
+              <Text style={styles.ratingText}>{displayVersion.rating}</Text>
+            </View>
+          )}
+        </View>
       </View>
       <TouchableOpacity
         ref={buttonRef}
@@ -327,6 +331,11 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   songArtist: {
     ...typography.bodySmall,
     color: colors.textMuted,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   ratingContainer: {
     flexDirection: "row",
