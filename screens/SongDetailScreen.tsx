@@ -25,10 +25,13 @@ import {
   deleteVersion,
   addVersion,
   updateVersion,
+  updateSongKey,
 } from '../lib/database';
 import { saveAudioLocally } from '../lib/storage';
 import RecorderModal from '../components/RecorderModal';
 import { AlbumArt } from '../components/AlbumArt';
+import KeyBadge from '../components/KeyBadge';
+import KeyPickerModal from '../components/KeyPickerModal';
 import { usePlayer } from '../contexts/PlayerContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { useTheme } from '../contexts/ThemeContext';
@@ -82,6 +85,7 @@ const VersionItem = ({
                 <Text style={styles.defaultBadgeText}>대표</Text>
               </View>
             )}
+            <KeyBadge value={version.key} />
           </View>
           <View style={styles.ratingStars}>
             {[1, 2, 3, 4, 5].map((star) => (
@@ -136,6 +140,8 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   const [newRating, setNewRating] = useState(0);
   const [memoModalVisible, setMemoModalVisible] = useState(false);
   const [newMemo, setNewMemo] = useState('');
+  // 키 편집 대상: 'song'이면 곡 myKey, 그 외는 해당 버전 key
+  const [keyPickerTarget, setKeyPickerTarget] = useState<'song' | Version | null>(null);
 
   const handlePlayVersion = (version: Version) => {
     if (!song || !song.versions || song.versions.length === 0) return;
@@ -306,15 +312,40 @@ export default function SongDetailScreen({ route, navigation }: Props) {
     }
   };
 
-  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number) => {
+  const handleSaveRecording = async (audioUri: string, rating: number, memo?: string, waveform?: number[], duration?: number, key?: number) => {
     try {
       const { fileName, localUri } = await saveAudioLocally(songId, audioUri);
-      await addVersion(songId, fileName, localUri, rating, duration, memo, { waveform });
+      await addVersion(songId, fileName, localUri, rating, duration, memo, { waveform, key });
       await fetchSong();
       logEvent('version_recorded', { rating, hasMemo: !!memo, duration: duration ?? 0 });
     } catch (error) {
       console.error('녹음 저장 실패:', error);
       throw error;
+    }
+  };
+
+  const handleEditVersionKey = () => {
+    if (menuState.version) {
+      setKeyPickerTarget(menuState.version);
+      closeMenu();
+    }
+  };
+
+  const handleSaveKey = async (key: number) => {
+    const target = keyPickerTarget;
+    setKeyPickerTarget(null);
+    if (!target) return;
+    try {
+      if (target === 'song') {
+        await updateSongKey(songId, key);
+      } else {
+        await updateVersion(target.id, { key });
+      }
+      await fetchSong();
+      logEvent('key_edited', { scope: target === 'song' ? 'song' : 'version', key });
+    } catch (error) {
+      console.error('키 수정 실패:', error);
+      Alert.alert('오류', '키 수정에 실패했습니다.');
     }
   };
 
@@ -344,12 +375,20 @@ export default function SongDetailScreen({ route, navigation }: Props) {
           {song.artist && (
             <Text style={styles.songArtist}>{song.artist}</Text>
           )}
-          {song.defaultVersion && (
-            <View style={styles.ratingDisplay}>
-              <Ionicons name="star" size={16} color={colors.star} />
-              <Text style={styles.ratingDisplayText}>{song.defaultVersion.rating}</Text>
-            </View>
-          )}
+          <View style={styles.headerMetaRow}>
+            {song.defaultVersion && (
+              <View style={styles.ratingDisplay}>
+                <Ionicons name="star" size={16} color={colors.star} />
+                <Text style={styles.ratingDisplayText}>{song.defaultVersion.rating}</Text>
+              </View>
+            )}
+            <KeyBadge
+              value={song.myKey}
+              showPlaceholder
+              size="md"
+              onPress={() => setKeyPickerTarget('song')}
+            />
+          </View>
         </View>
 
         {/* 액션 버튼 */}
@@ -399,6 +438,22 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         visible={recorderVisible}
         onClose={() => setRecorderVisible(false)}
         onSave={handleSaveRecording}
+        defaultKey={song.myKey}
+      />
+
+      {/* 키 편집 모달 (곡 또는 버전 공용) */}
+      <KeyPickerModal
+        visible={keyPickerTarget !== null}
+        title={keyPickerTarget === 'song' ? '음정' : '이 녹음의 음정'}
+        initialValue={
+          keyPickerTarget === 'song'
+            ? song.myKey
+            : keyPickerTarget
+            ? keyPickerTarget.key
+            : undefined
+        }
+        onClose={() => setKeyPickerTarget(null)}
+        onSave={handleSaveKey}
       />
 
       {/* 평점 수정 모달 */}
@@ -522,6 +577,13 @@ export default function SongDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.menuItem}
+                onPress={handleEditVersionKey}
+              >
+                <Ionicons name="musical-note" size={20} color={colors.text} />
+                <Text style={styles.menuItemText}>키 수정</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
                 onPress={handleEditMemo}
               >
                 <Ionicons name="create-outline" size={20} color={colors.text} />
@@ -628,6 +690,11 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
     marginBottom: spacing.lg,
+  },
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   ratingDisplay: {
     flexDirection: 'row',

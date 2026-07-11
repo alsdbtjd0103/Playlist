@@ -116,6 +116,7 @@ export const addVersion = async (
     trim?: { start: number; end: number };
     cuts?: { start: number; end: number }[];
     editedFrom?: string;
+    key?: number;
   }
 ): Promise<string> => {
   const now = new Date();
@@ -134,17 +135,21 @@ export const addVersion = async (
     trim: extra?.trim,
     cuts: extra?.cuts,
     editedFrom: extra?.editedFrom,
+    key: extra?.key,
   };
 
   const versions = await getAllVersions();
   versions.push(newVersion);
   await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
 
-  // 곡의 updatedAt 갱신
+  // 곡의 updatedAt 갱신 + 키 자동 반영(버전 저장 시 곡의 내 키 = 이 녹음 키)
   const songs = await getAllSongs();
   const songIndex = songs.findIndex((s) => s.id === songId);
   if (songIndex !== -1) {
     songs[songIndex].updatedAt = now;
+    if (extra?.key !== undefined) {
+      songs[songIndex].myKey = extra.key;
+    }
     await AsyncStorage.setItem(KEYS.SONGS, JSON.stringify(songs));
   }
 
@@ -182,7 +187,7 @@ export const getVersionsBySong = async (songId: string): Promise<Version[]> => {
 
 export const updateVersion = async (
   versionId: string,
-  updates: { rating?: number; memo?: string }
+  updates: { rating?: number; memo?: string; key?: number }
 ): Promise<void> => {
   const versions = await getAllVersions();
   const versionIndex = versions.findIndex((v) => v.id === versionId);
@@ -194,7 +199,29 @@ export const updateVersion = async (
     if (updates.memo !== undefined) {
       versions[versionIndex].memo = updates.memo;
     }
+    if (updates.key !== undefined) {
+      versions[versionIndex].key = updates.key;
+    }
     await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
+
+    // 버전 키를 수정하면 곡의 내 키도 최근 의도로 반영
+    if (updates.key !== undefined) {
+      await updateSongKey(versions[versionIndex].songId, updates.key);
+    }
+  }
+};
+
+/** 곡의 내 키(myKey)를 직접 설정. undefined면 미설정으로 되돌림. */
+export const updateSongKey = async (
+  songId: string,
+  key: number | undefined
+): Promise<void> => {
+  const songs = await getAllSongs();
+  const songIndex = songs.findIndex((s) => s.id === songId);
+  if (songIndex !== -1) {
+    songs[songIndex].myKey = key;
+    songs[songIndex].updatedAt = new Date();
+    await AsyncStorage.setItem(KEYS.SONGS, JSON.stringify(songs));
   }
 };
 
