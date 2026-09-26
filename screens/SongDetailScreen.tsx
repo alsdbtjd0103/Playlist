@@ -11,6 +11,8 @@ import {
   TouchableWithoutFeedback,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -35,6 +37,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import Waveform from '../components/Waveform';
 import { logEvent, logScreen } from '../lib/analytics';
 import { isNativeDenoiseAvailable } from '../lib/nativeDenoise';
+import { getVersionNumberMap, formatVersionNumber } from '../lib/versionLabel';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SongDetail'>;
 
@@ -43,11 +46,13 @@ const DENOISE_AVAILABLE = isNativeDenoiseAvailable();
 
 const VersionItem = ({
   version,
+  versionNumber,
   song,
   onPlay,
   onOpenMenu,
 }: {
   version: Version;
+  versionNumber?: number;
   song: SongWithVersions;
   onPlay: () => void;
   onOpenMenu: (x: number, y: number, version: Version) => void;
@@ -67,6 +72,7 @@ const VersionItem = ({
       <View style={styles.versionRow}>
         <TouchableOpacity style={styles.versionInfo} onPress={onPlay} activeOpacity={0.7}>
           <View style={styles.versionTitleRow}>
+            <Text style={styles.versionNumber}>{formatVersionNumber(versionNumber)}</Text>
             <Text style={styles.versionDate}>
               {new Date(version.recordedAt).toLocaleDateString('ko-KR', {
                 year: 'numeric',
@@ -135,9 +141,11 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   const [memoModalVisible, setMemoModalVisible] = useState(false);
   const [newMemo, setNewMemo] = useState('');
 
+  const versionNumbers = useMemo(() => getVersionNumberMap(song?.versions ?? []), [song]);
+
   const handlePlayVersion = (version: Version) => {
     if (!song || !song.versions || song.versions.length === 0) return;
-    const items = song.versions.map((v) => ({ song, version: v }));
+    const items = song.versions.map((v) => ({ song, version: v, versionNumber: versionNumbers.get(v.id) }));
     const startIndex = items.findIndex((it) => it.version.id === version.id);
     setPlaylist(items, startIndex >= 0 ? startIndex : 0);
     logEvent('version_played', { rating: version.rating, hasMemo: !!version.memo });
@@ -363,6 +371,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
                 <VersionItem
                   key={version.id}
                   version={version}
+                  versionNumber={versionNumbers.get(version.id)}
                   song={song}
                   onPlay={() => handlePlayVersion(version)}
                   onOpenMenu={handleOpenMenu}
@@ -380,12 +389,14 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         </View>
       </ScrollView>
 
-      {/* 녹음 모달 */}
-      <RecorderModal
-        visible={recorderVisible}
-        onClose={() => setRecorderVisible(false)}
-        onSave={handleSaveRecording}
-      />
+      {/* 녹음 모달: 열려 있을 때만 마운트 (닫힌 상태에서도 녹음 상태 폴링·오디오 모드 변경이 돌지 않게) */}
+      {recorderVisible && (
+        <RecorderModal
+          visible={recorderVisible}
+          onClose={() => setRecorderVisible(false)}
+          onSave={handleSaveRecording}
+        />
+      )}
 
       {/* 평점 수정 모달 */}
       <Modal
@@ -438,7 +449,10 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         animationType="fade"
         onRequestClose={() => setMemoModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>메모 수정</Text>
@@ -474,7 +488,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 드롭다운 메뉴 */}
@@ -695,6 +709,11 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  versionNumber: {
+    ...typography.body,
+    fontFamily: fontFamily.semibold,
+    color: colors.textMuted,
   },
   versionDate: {
     ...typography.body,

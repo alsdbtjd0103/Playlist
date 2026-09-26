@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,11 +26,14 @@ import {
   getPlaylistWithDetails,
   removeFromPlaylist,
   getAllSongs,
-  getVersionsBySong,
+  getAllVersions,
   addToPlaylist,
   reorderPlaylistItems,
+  updateSongDefaultVersion,
+  PlaylistDetailItem,
 } from '../lib/database';
-import { usePlayer } from '../contexts/PlayerContext';
+import { usePlayer, PlayingTrack } from '../contexts/PlayerContext';
+import { getVersionNumberMap, formatVersionNumber } from '../lib/versionLabel';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { useTheme } from '../contexts/ThemeContext';
 import Waveform from '../components/Waveform';
@@ -38,14 +41,10 @@ import { logEvent, logScreen } from '../lib/analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaylistDetail'>;
 
-interface PlaylistItem {
-  id: string;
-  versionId: string;
-  order: number;
-  addedAt: Date;
-  version: Version;
-  song: Song;
-}
+type PlaylistItem = PlaylistDetailItem;
+
+const toPlayingTracks = (items: PlaylistItem[]): PlayingTrack[] =>
+  items.map((item) => ({ song: item.song, version: item.version, versionNumber: item.versionNumber }));
 
 type SortOrder = null | 'newest' | 'oldest';
 
@@ -57,10 +56,11 @@ export default function PlaylistDetailScreen({ route }: Props) {
   const [playlist, setPlaylistData] = useState<any>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [availableSongs, setAvailableSongs] = useState<{ song: Song; versions: Version[] }[]>([]);
+  const [versionNumbers, setVersionNumbers] = useState<Map<string, number>>(new Map());
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>(null);
-  const { setPlaylist, playlistState } = usePlayer();
+  const { setPlaylist, syncQueue, playlistState } = usePlayer();
 
   useFocusEffect(
     useCallback(() => {
@@ -81,13 +81,14 @@ export default function PlaylistDetailScreen({ route }: Props) {
   const fetchAvailableSongs = async () => {
     try {
       setLoading(true);
-      const songs = await getAllSongs();
-      const songsWithVersions = await Promise.all(
-        songs.map(async (song) => ({
-          song,
-          versions: await getVersionsBySong(song.id),
-        }))
-      );
+      const [songs, versions] = await Promise.all([getAllSongs(), getAllVersions()]);
+      const songsWithVersions = songs.map((song) => ({
+        song,
+        versions: versions
+          .filter((v) => v.songId === song.id)
+          .sort((a, b) => b.recordedAt.getTime() - a.recordedAt.getTime()),
+      }));
+      setVersionNumbers(getVersionNumberMap(versions));
       setAvailableSongs(songsWithVersions.filter(s => s.versions.length > 0));
     } catch (error) {
       console.error('곡 목록 로드 실패:', error);
@@ -137,18 +138,25 @@ export default function PlaylistDetailScreen({ route }: Props) {
     }
   };
 
-  const getSortedItems = (items: PlaylistItem[]): PlaylistItem[] => {
+  const sortedItems = useMemo<PlaylistItem[]>(() => {
+    const items: PlaylistItem[] = playlist?.items ?? [];
     if (!sortOrder) return items;
     return [...items].sort((a, b) => {
       const aTime = new Date(a.version.recordedAt).getTime();
       const bTime = new Date(b.version.recordedAt).getTime();
       return sortOrder === 'newest' ? bTime - aTime : aTime - bTime;
     });
-  };
+  }, [playlist, sortOrder]);
+
+  // 순서 변경·정렬·추가/제거가 생기면, 이 플레이리스트를 재생 중일 때 큐에도 즉시 반영한다
+  // (현재 곡은 끊지 않음. 다른 출처의 큐를 재생 중이면 syncQueue가 무시한다).
+  useEffect(() => {
+    if (!playlist) return;
+    syncQueue(playlistId, toPlayingTracks(sortedItems));
+  }, [sortedItems, playlistId, syncQueue]);
 
   const handleTrackPress = (index: number) => {
-    const sorted = getSortedItems(playlist.items);
-    setPlaylist(sorted.map((item: PlaylistItem) => ({ song: item.song, version: item.version })), index);
+    setPlaylist(toPlayingTracks(sortedItems), index, playlistId);
   };
 
   const handleDragEnd = async ({ data }: { data: PlaylistItem[] }) => {
@@ -165,11 +173,18 @@ export default function PlaylistDetailScreen({ route }: Props) {
     ? playlistState.items[playlistState.currentIndex]?.version.id ?? null
     : null;
 
-  const handleRemoveItem = (item: PlaylistItem) => {
-    if (playlist.isDefault) {
-      Alert.alert('알림', '기본 플레이리스트에서는 항목을 삭제할 수 없습니다.');
-      return;
+  const handleSetDefault = async (item: PlaylistItem) => {
+    try {
+      await updateSongDefaultVersion(item.song.id, item.version.id);
+      await fetchPlaylist();
+      logEvent('playlist_set_default_version', { versionNumber: item.versionNumber });
+    } catch (error) {
+      console.error('대표 버전 설정 실패:', error);
+      Alert.alert('오류', '대표 버전 설정에 실패했습니다.');
     }
+  };
+
+  const handleRemoveItem = (item: PlaylistItem) => {
     Alert.alert(
       '항목 제거',
       `"${item.song.title}"을(를) 플레이리스트에서 제거하시겠습니까?`,
@@ -190,6 +205,22 @@ export default function PlaylistDetailScreen({ route }: Props) {
         },
       ]
     );
+  };
+
+  // 길게 누르면 트랙 메뉴: 대표 버전 지정 / 제거
+  const handleTrackMenu = (item: PlaylistItem) => {
+    if (playlist.isDefault) {
+      Alert.alert('알림', '기본 플레이리스트에서는 항목을 삭제할 수 없습니다.');
+      return;
+    }
+    const label = `${item.song.title} ${formatVersionNumber(item.versionNumber)}`;
+    Alert.alert(label, undefined, [
+      ...(item.isDefault
+        ? []
+        : [{ text: '대표 버전으로 지정', onPress: () => handleSetDefault(item) }]),
+      { text: '플레이리스트에서 제거', style: 'destructive' as const, onPress: () => handleRemoveItem(item) },
+      { text: '취소', style: 'cancel' as const },
+    ]);
   };
 
   const cycleSortOrder = () => {
@@ -213,7 +244,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
         <GHTouchableOpacity
           style={[styles.trackItem, isPlaying && styles.trackItemActive, isActive && styles.trackItemDragging]}
           onPress={() => handleTrackPress(index)}
-          onLongPress={() => !isActive && handleRemoveItem(item)}
+          onLongPress={() => !isActive && handleTrackMenu(item)}
           activeOpacity={0.7}
           disabled={isActive}
         >
@@ -228,9 +259,17 @@ export default function PlaylistDetailScreen({ route }: Props) {
             <Text style={[styles.trackTitle, isPlaying && styles.trackTitleActive]} numberOfLines={1}>
               {item.song.title}
             </Text>
-            {item.song.artist && (
-              <Text style={styles.trackArtist} numberOfLines={1}>{item.song.artist}</Text>
-            )}
+            <View style={styles.trackMetaRow}>
+              <Text style={styles.trackArtist} numberOfLines={1}>
+                {[item.song.artist, formatVersionNumber(item.versionNumber)].filter(Boolean).join(' · ')}
+              </Text>
+              {item.isDefault && !playlist.isDefault && (
+                <View style={styles.defaultBadge}>
+                  <Ionicons name="checkmark-circle" size={11} color={colors.accentStrong} />
+                  <Text style={styles.defaultBadgeText}>대표</Text>
+                </View>
+              )}
+            </View>
           </View>
           <View style={styles.trackRating}>
             <Ionicons name="star" size={14} color={colors.star} />
@@ -301,7 +340,7 @@ export default function PlaylistDetailScreen({ route }: Props) {
         </View>
       ) : (
         <DraggableFlatList
-          data={getSortedItems(playlist.items)}
+          data={sortedItems}
           renderItem={renderTrackItem}
           keyExtractor={(item) => item.id}
           onDragEnd={isDragEnabled ? handleDragEnd : undefined}
@@ -386,6 +425,9 @@ export default function PlaylistDetailScreen({ route }: Props) {
                           >
                             <View style={styles.versionInfo}>
                               <View style={styles.versionMeta}>
+                                <Text style={styles.versionNumber}>
+                                  {formatVersionNumber(versionNumbers.get(version.id))}
+                                </Text>
                                 <Ionicons name="star" size={12} color={colors.star} />
                                 <Text style={styles.versionRating}>{version.rating}</Text>
                                 <Text style={styles.versionDate}>
@@ -604,6 +646,27 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   trackArtist: {
     ...typography.bodySmall,
     color: colors.textMuted,
+    flexShrink: 1,
+  },
+  trackMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  defaultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  defaultBadgeText: {
+    ...typography.caption,
+    color: colors.accentStrong,
+    fontWeight: '600',
+  },
+  versionNumber: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: '600',
   },
   trackRating: {
     flexDirection: 'row',
