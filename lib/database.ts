@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Song, Version, Playlist, PlaylistItem } from '@/types';
+import { getVersionNumberMap } from './versionLabel';
 
 // AsyncStorage 키 상수
 const KEYS = {
@@ -371,66 +372,129 @@ export const reorderPlaylistItems = async (playlistId: string, orderedItemIds: s
   await AsyncStorage.setItem(KEYS.PLAYLIST_ITEMS, JSON.stringify(updatedItems));
 };
 
+export interface PlaylistDetailItem extends PlaylistItem {
+  version: Version;
+  song: Song;
+  versionNumber: number;
+  isDefault: boolean;
+}
+
+// 곡/버전을 한 번씩만 읽어 조인한다(항목마다 저장소를 다시 읽으면 목록이 길 때 느려짐).
 export const getPlaylistWithDetails = async (playlistId: string) => {
   const playlist = (await getAllPlaylists()).find((p) => p.id === playlistId);
   if (!playlist) return null;
 
-  const items = await getPlaylistItems(playlistId);
-  const itemsWithDetails = await Promise.all(
-    items.map(async (item) => {
-      const version = await getVersion(item.versionId);
-      if (!version) return null;
+  const [items, versions, songs] = await Promise.all([
+    getPlaylistItems(playlistId),
+    getAllVersions(),
+    getAllSongs(),
+  ]);
+  const versionById = new Map(versions.map((v) => [v.id, v]));
+  const songById = new Map(songs.map((s) => [s.id, s]));
+  const numbers = getVersionNumberMap(versions);
 
-      const song = await getSong(version.songId);
-      if (!song) return null;
-
-      return {
-        ...item,
-        version,
-        song,
-      };
-    })
-  );
+  const itemsWithDetails: PlaylistDetailItem[] = [];
+  for (const item of items) {
+    const version = versionById.get(item.versionId);
+    if (!version) continue;
+    const song = songById.get(version.songId);
+    if (!song) continue;
+    itemsWithDetails.push({
+      ...item,
+      version,
+      song,
+      versionNumber: numbers.get(version.id) ?? 0,
+      isDefault: song.defaultVersionId === version.id,
+    });
+  }
 
   return {
     ...playlist,
-    items: itemsWithDetails.filter((item) => item !== null),
+    items: itemsWithDetails,
   };
 };
 
 export const getAllDefaultVersions = async (): Promise<{ song: Song; version: Version }[]> => {
-  const songs = await getAllSongs();
-  const results = await Promise.all(
-    songs.map(async (song) => {
-      if (!song.defaultVersionId) return null;
+  const [songs, versions] = await Promise.all([getAllSongs(), getAllVersions()]);
+  const versionById = new Map(versions.map((v) => [v.id, v]));
+  const results: { song: Song; version: Version }[] = [];
+  for (const song of songs) {
+    if (!song.defaultVersionId) continue;
+    const version = versionById.get(song.defaultVersionId);
+    if (version) results.push({ song, version });
+  }
+  return results;
+};
 
-      const version = await getVersion(song.defaultVersionId);
-      if (!version) return null;
+// === 메모 피드 ===
 
-      return { song, version };
-    })
-  );
+export interface MemoFeedItem {
+  version: Version;
+  song: Song;
+  versionNumber: number;
+}
 
-  return results.filter((item) => item !== null) as { song: Song; version: Version }[];
+// 메모가 있는 버전만 녹음일 최신순으로 모은다.
+export const getMemoFeed = async (): Promise<MemoFeedItem[]> => {
+  const [songs, versions] = await Promise.all([getAllSongs(), getAllVersions()]);
+  const songById = new Map(songs.map((s) => [s.id, s]));
+  const numbers = getVersionNumberMap(versions);
+
+  const feed: MemoFeedItem[] = [];
+  for (const version of versions) {
+    if (!version.memo?.trim()) continue;
+    const song = songById.get(version.songId);
+    if (!song) continue;
+    feed.push({ version, song, versionNumber: numbers.get(version.id) ?? 0 });
+  }
+  return feed.sort((a, b) => b.version.recordedAt.getTime() - a.version.recordedAt.getTime());
 };
 
 // === 기본 플레이리스트 관리 ===
 
-// 기본 플레이리스트가 있는지 확인하고 없으면 생성
-export const ensureDefaultPlaylist = async (): Promise<string> => {
-  const playlists = await getAllPlaylists();
-  const defaultPlaylist = playlists.find((p) => p.isDefault);
-  
-  if (defaultPlaylist) {
-    return defaultPlaylist.id;
+// 기본 플레이리스트가 있는지 확인하고 없으면 생성.
+// 여러 화면이 동시에 불러도 대표곡이 두 번 만들어지지 않도록 진행 중인 호출을 공유한다.
+let ensuringDefault: Promise<string> | null = null;
+
+export const ensureDefaultPlaylist = (): Promise<string> => {
+  if (!ensuringDefault) {
+    ensuringDefault = ensureDefaultPlaylistOnce().finally(() => {
+      ensuringDefault = null;
+    });
   }
-  
-  // 기본 플레이리스트 생성
+  return ensuringDefault;
+};
+
+const ensureDefaultPlaylistOnce = async (): Promise<string> => {
+  const playlists = await getAllPlaylists();
+  const defaults = playlists
+    .filter((p) => p.isDefault)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  if (defaults.length === 1) {
+    return defaults[0].id;
+  }
+
+  if (defaults.length > 1) {
+    // 예전 복원/동시 생성으로 대표곡이 여러 개 생긴 경우: 가장 오래된 하나만 남긴다
+    const keep = defaults[0];
+    const dropIds = new Set(defaults.slice(1).map((p) => p.id));
+    const items = await getAllPlaylistItems();
+    await AsyncStorage.setItem(
+      KEYS.PLAYLIST_ITEMS,
+      JSON.stringify(items.filter((item) => !dropIds.has(item.playlistId)))
+    );
+    await AsyncStorage.setItem(
+      KEYS.PLAYLISTS,
+      JSON.stringify(playlists.filter((p) => !dropIds.has(p.id)))
+    );
+    await syncDefaultPlaylistInto(keep.id);
+    return keep.id;
+  }
+
+  // 기본 플레이리스트 생성 후 기존 대표 버전들을 모두 추가
   const playlistId = await createPlaylist(DEFAULT_PLAYLIST_NAME, true);
-  
-  // 기존 대표 버전들을 모두 추가
-  await syncDefaultPlaylist();
-  
+  await syncDefaultPlaylistInto(playlistId);
   return playlistId;
 };
 
@@ -469,18 +533,35 @@ const mergeCollection = async (key: string, incoming: any[]): Promise<MergeCount
   return { added, skipped };
 };
 
+// 기본(대표곡) 플레이리스트는 기기마다 id가 달라 id 병합으로는 중복 생성되므로 가져오지 않는다.
+// 대표곡 구성은 복원 후 syncDefaultPlaylist가 곡의 defaultVersionId로 다시 맞춘다.
 export const mergeImport = async (data: {
   songs: any[]; versions: any[]; playlists: any[]; playlistItems: any[];
-}): Promise<MergeResult> => ({
-  songs: await mergeCollection(KEYS.SONGS, data.songs),
-  versions: await mergeCollection(KEYS.VERSIONS, data.versions),
-  playlists: await mergeCollection(KEYS.PLAYLISTS, data.playlists),
-  playlistItems: await mergeCollection(KEYS.PLAYLIST_ITEMS, data.playlistItems),
-});
+}): Promise<MergeResult> => {
+  const incomingPlaylists = data.playlists ?? [];
+  const defaultIds = new Set(incomingPlaylists.filter((p) => p.isDefault).map((p) => p.id));
+  const playlists = incomingPlaylists.filter((p) => !defaultIds.has(p.id));
+  const playlistItems = (data.playlistItems ?? []).filter((i) => !defaultIds.has(i.playlistId));
+
+  const playlistCounts = await mergeCollection(KEYS.PLAYLISTS, playlists);
+  const itemCounts = await mergeCollection(KEYS.PLAYLIST_ITEMS, playlistItems);
+  return {
+    songs: await mergeCollection(KEYS.SONGS, data.songs),
+    versions: await mergeCollection(KEYS.VERSIONS, data.versions),
+    playlists: { ...playlistCounts, skipped: playlistCounts.skipped + defaultIds.size },
+    playlistItems: {
+      ...itemCounts,
+      skipped: itemCounts.skipped + ((data.playlistItems ?? []).length - playlistItems.length),
+    },
+  };
+};
 
 // 대표곡 플레이리스트를 현재 대표 버전들과 동기화
 export const syncDefaultPlaylist = async (): Promise<void> => {
-  const playlistId = await ensureDefaultPlaylist();
+  await syncDefaultPlaylistInto(await ensureDefaultPlaylist());
+};
+
+const syncDefaultPlaylistInto = async (playlistId: string): Promise<void> => {
   
   // 현재 플레이리스트 항목들 가져오기
   const currentItems = await getPlaylistItems(playlistId);

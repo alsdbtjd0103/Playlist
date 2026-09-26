@@ -20,6 +20,7 @@ import {
   deletePlaylist,
   ensureDefaultPlaylist,
   getPlaylistWithDetails,
+  getMemoFeed,
 } from '@/lib/database';
 
 // generateId / createdAt / recordedAt 가 모두 같은 밀리초에 찍히면 정렬을
@@ -284,5 +285,50 @@ describe('Version trim/waveform', () => {
     expect(nv?.waveform).toEqual([0.2, 0.4]);      // 파형 승계
     const list = await getVersionsBySong(songId);
     expect(list).toHaveLength(2);
+  });
+});
+
+describe('버전 번호/대표 여부 · 메모 피드', () => {
+  it('getPlaylistWithDetails 항목에 versionNumber와 isDefault가 포함된다', async () => {
+    const songId = await addSong('번호곡');
+    const v1 = await addVersion(songId, '1.m4a', 'file://1', 3);
+    tick(1000);
+    const v2 = await addVersion(songId, '2.m4a', 'file://2', 5);
+    await updateSongDefaultVersion(songId, v1);
+    const playlistId = await createPlaylist('번호플리');
+    await addToPlaylist(playlistId, v2, 0);
+    await addToPlaylist(playlistId, v1, 1);
+
+    const detail = await getPlaylistWithDetails(playlistId);
+    expect(detail?.items.map((i) => [i.version.id, i.versionNumber, i.isDefault])).toEqual([
+      [v2, 2, false],
+      [v1, 1, true],
+    ]);
+  });
+
+  it('getMemoFeed는 메모가 있는 버전만 녹음일 최신순으로 반환한다', async () => {
+    const s1 = await addSong('곡A');
+    const s2 = await addSong('곡B');
+    const a1 = await addVersion(s1, 'a1.m4a', 'file://a1', 3, undefined, '첫 메모');
+    tick(1000);
+    await addVersion(s1, 'a2.m4a', 'file://a2', 3); // 메모 없음
+    tick(1000);
+    const b1 = await addVersion(s2, 'b1.m4a', 'file://b1', 4, undefined, '두번째 메모');
+    tick(1000);
+    const a3 = await addVersion(s1, 'a3.m4a', 'file://a3', 4, undefined, '   ');
+    await updateVersion(a3, { memo: '   ' }); // 공백 메모는 제외
+
+    const feed = await getMemoFeed();
+    expect(feed.map((f) => f.version.id)).toEqual([b1, a1]);
+    expect(feed[0].song.title).toBe('곡B');
+    expect(feed[0].versionNumber).toBe(1);
+    expect(feed[1].versionNumber).toBe(1);
+  });
+
+  it('getMemoFeed는 곡이 삭제된 고아 버전을 제외한다', async () => {
+    const s = await addSong('곡');
+    await addVersion(s, 'x.m4a', 'file://x', 3, undefined, '메모');
+    await deleteSong(s);
+    expect(await getMemoFeed()).toEqual([]);
   });
 });
