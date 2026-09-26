@@ -24,7 +24,7 @@
     "production": {
       "android": {
         "applicationId": "com.playlist.app",
-        "track": "internal"
+        "track": "production"
       }
     }
   }

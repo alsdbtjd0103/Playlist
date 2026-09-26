@@ -1,0 +1,5 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": { "modules": ["AudioEditModule"] },
+  "android": { "modules": ["expo.modules.audioedit.AudioEditModule"] }
+}

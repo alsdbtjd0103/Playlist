@@ -9,9 +9,18 @@ import TrackPlayer, {
   AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
 import { Song, Version } from '../types';
-import { isPastTrimEnd } from '../lib/trim';
+import { getEffectiveCuts, nextKeepStart } from '../lib/trim';
 import { planQueueSync } from '../lib/queueNav';
 import { skipWrapped } from '../services/queueControl';
+
+/** 버전의 첫 재생 시작 지점(첫 남길 구간의 시작). cuts/레거시 trim 모두 대응. */
+const playStartOf = (version: Version): number => {
+  const dur = version.duration || 0;
+  if (dur <= 0) return 0;
+  const cuts = getEffectiveCuts(version, dur);
+  if (cuts.length === 0) return 0;
+  return nextKeepStart(0, cuts, dur) ?? 0;
+};
 
 export interface PlayingTrack {
   song: Song;
@@ -177,11 +186,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!trackChanged) return;
 
       setCurrentTrackState(newTrack);
-      if (newTrack.version.trim) {
+      const startAt = playStartOf(newTrack.version);
+      if (startAt > 0) {
         try {
-          await TrackPlayer.seekTo(newTrack.version.trim.start);
+          await TrackPlayer.seekTo(startAt);
         } catch (error) {
-          console.error('트림 시작 위치 이동 실패:', error);
+          console.error('편집 시작 위치 이동 실패:', error);
         }
       }
     });
@@ -205,7 +215,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         activeIdRef.current = track.version.id;
         await TrackPlayer.add(toTrack(track));
         await TrackPlayer.play();
-        if (track.version.trim) { await TrackPlayer.seekTo(track.version.trim.start); }
+        const startAt = playStartOf(track.version);
+        if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
         setCurrentTrackState(track);
       } catch (error) {
         console.error('트랙 설정 실패:', error);
@@ -269,8 +280,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         await TrackPlayer.add(items.map(toTrack));
         await TrackPlayer.skip(startIndex);
         await TrackPlayer.play();
-        const startTrim = items[startIndex]?.version.trim;
-        if (startTrim) { await TrackPlayer.seekTo(startTrim.start); }
+        const startItem = items[startIndex];
+        const startAt = startItem ? playStartOf(startItem.version) : 0;
+        if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
 
         setIsExpanded(true);
       } catch (error) {
@@ -394,7 +406,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   return (
     <PlayerContext.Provider value={value}>
       {children}
-      <TrimEndWatcher
+      <CutsWatcher
         currentTrack={currentTrack}
         isPlaying={isPlaying}
         hasNext={(playlistState?.items.length ?? 0) > 1}
@@ -404,9 +416,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// trim.end 도달 시 다음 곡/정지. 진행률 폴링을 이 컴포넌트에 가둬서
-// Provider 전체(모든 usePlayer 소비자)가 폴링마다 리렌더되지 않게 한다.
-function TrimEndWatcher({
+// 재생 중 cut 구간 건너뛰기 + 마지막 남길 구간 끝 도달 시 다음 곡/정지.
+// 진행률 폴링을 이 컴포넌트에 가둬서 Provider 전체(모든 usePlayer 소비자)가 폴링마다 리렌더되지 않게 한다.
+function CutsWatcher({
   currentTrack,
   isPlaying,
   hasNext,
@@ -417,11 +429,16 @@ function TrimEndWatcher({
   hasNext: boolean;
   playNext: () => void;
 }) {
-  const trim = currentTrack?.version.trim;
-  const trackId = currentTrack?.version.id ?? null;
-  const progress = useProgress(trim ? 500 : 60_000);
+  const version = currentTrack?.version;
+  const trackId = version?.id ?? null;
+  const dur = version?.duration || 0;
+  const cuts = useMemo(
+    () => (version && dur > 0 ? getEffectiveCuts(version, dur) : []),
+    [version, dur]
+  );
+  const progress = useProgress(cuts.length > 0 ? 500 : 60_000);
   // 곡이 바뀐 직후의 progress는 이전 곡 위치일 수 있으므로,
-  // 현재 곡에서 trim.end 이전 위치를 한 번 확인한 뒤에만 종료 판정을 한다.
+  // 현재 곡에서 남길 구간 안의 위치를 한 번 확인한 뒤에만 건너뛰기/종료 판정을 한다.
   const armedRef = useRef<string | null>(null);
   const handledRef = useRef<string | null>(null);
 
@@ -431,19 +448,27 @@ function TrimEndWatcher({
   }, [trackId]);
 
   useEffect(() => {
-    if (!trim || !trackId || !isPlaying) return;
-    if (!isPastTrimEnd(progress.position, trim)) {
-      armedRef.current = trackId;
+    if (!trackId || cuts.length === 0 || !isPlaying) return;
+    const pos = progress.position;
+    const nxt = nextKeepStart(pos, cuts, dur);
+    if (armedRef.current !== trackId) {
+      if (nxt !== null && Math.abs(nxt - pos) < 0.05) armedRef.current = trackId;
       return;
     }
-    if (armedRef.current !== trackId || handledRef.current === trackId) return;
-    handledRef.current = trackId;
-    if (hasNext) {
-      playNext();
-    } else {
-      TrackPlayer.pause().catch(() => {});
+    if (nxt === null) {
+      // 마지막 남길 구간의 끝 → 종료 처리
+      if (handledRef.current === trackId) return;
+      handledRef.current = trackId;
+      if (hasNext) {
+        playNext();
+      } else {
+        TrackPlayer.pause().catch(() => {});
+      }
+    } else if (nxt > pos + 0.05) {
+      // cut 진입 → 다음 남길 지점으로 건너뛰기
+      TrackPlayer.seekTo(nxt).catch(() => {});
     }
-  }, [progress.position, trim, trackId, isPlaying, hasNext, playNext]);
+  }, [progress.position, cuts, dur, trackId, isPlaying, hasNext, playNext]);
 
   return null;
 }

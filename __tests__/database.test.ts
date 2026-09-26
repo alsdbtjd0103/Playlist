@@ -21,6 +21,7 @@ import {
   ensureDefaultPlaylist,
   getPlaylistWithDetails,
   getMemoFeed,
+  updateSongKey,
 } from '@/lib/database';
 
 // generateId / createdAt / recordedAt 가 모두 같은 밀리초에 찍히면 정렬을
@@ -330,5 +331,50 @@ describe('버전 번호/대표 여부 · 메모 피드', () => {
     await addVersion(s, 'x.m4a', 'file://x', 3, undefined, '메모');
     await deleteSong(s);
     expect(await getMemoFeed()).toEqual([]);
+  });
+});
+
+describe('키(Key) 관리', () => {
+  it('addVersion에 key를 주면 버전과 곡 myKey에 모두 반영된다', async () => {
+    const songId = await addSong('키곡');
+    const vid = await addVersion(songId, 'f.m4a', 'file:///f.m4a', 3, undefined, undefined, { key: 2 });
+    const v = await getVersion(vid);
+    const s = await getSong(songId);
+    expect(v?.key).toBe(2);
+    expect(s?.myKey).toBe(2);
+  });
+
+  it('key 없이 저장하면 버전 key와 곡 myKey는 미설정(undefined)', async () => {
+    const songId = await addSong('무키곡');
+    const vid = await addVersion(songId, 'f.m4a', 'file:///f.m4a', 3);
+    const v = await getVersion(vid);
+    const s = await getSong(songId);
+    expect(v?.key).toBeUndefined();
+    expect(s?.myKey).toBeUndefined();
+  });
+
+  it('원키(0)도 유효한 값으로 저장된다', async () => {
+    const songId = await addSong('원키곡');
+    await addVersion(songId, 'f.m4a', 'file:///f.m4a', 3, undefined, undefined, { key: 0 });
+    const s = await getSong(songId);
+    expect(s?.myKey).toBe(0);
+  });
+
+  it('updateVersion으로 key를 바꾸면 곡 myKey도 갱신된다', async () => {
+    const songId = await addSong('갱신곡');
+    const vid = await addVersion(songId, 'f.m4a', 'file:///f.m4a', 3, undefined, undefined, { key: 1 });
+    await updateVersion(vid, { key: -2 });
+    const v = await getVersion(vid);
+    const s = await getSong(songId);
+    expect(v?.key).toBe(-2);
+    expect(s?.myKey).toBe(-2);
+  });
+
+  it('updateSongKey는 곡 myKey를 직접 설정하고 되돌릴 수 있다', async () => {
+    const songId = await addSong('직접설정곡');
+    await updateSongKey(songId, 3);
+    expect((await getSong(songId))?.myKey).toBe(3);
+    await updateSongKey(songId, undefined);
+    expect((await getSong(songId))?.myKey).toBeUndefined();
   });
 });

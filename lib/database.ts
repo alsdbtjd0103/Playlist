@@ -112,7 +112,13 @@ export const addVersion = async (
   rating: number,
   duration?: number,
   memo?: string,
-  extra?: { waveform?: number[]; trim?: { start: number; end: number }; editedFrom?: string }
+  extra?: {
+    waveform?: number[];
+    trim?: { start: number; end: number };
+    cuts?: { start: number; end: number }[];
+    editedFrom?: string;
+    key?: number;
+  }
 ): Promise<string> => {
   const now = new Date();
   const versionId = generateId();
@@ -128,18 +134,23 @@ export const addVersion = async (
     memo: memo || undefined,
     waveform: extra?.waveform,
     trim: extra?.trim,
+    cuts: extra?.cuts,
     editedFrom: extra?.editedFrom,
+    key: extra?.key,
   };
 
   const versions = await getAllVersions();
   versions.push(newVersion);
   await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
 
-  // 곡의 updatedAt 갱신
+  // 곡의 updatedAt 갱신 + 키 자동 반영(버전 저장 시 곡의 내 키 = 이 녹음 키)
   const songs = await getAllSongs();
   const songIndex = songs.findIndex((s) => s.id === songId);
   if (songIndex !== -1) {
     songs[songIndex].updatedAt = now;
+    if (extra?.key !== undefined) {
+      songs[songIndex].myKey = extra.key;
+    }
     await AsyncStorage.setItem(KEYS.SONGS, JSON.stringify(songs));
   }
 
@@ -177,7 +188,7 @@ export const getVersionsBySong = async (songId: string): Promise<Version[]> => {
 
 export const updateVersion = async (
   versionId: string,
-  updates: { rating?: number; memo?: string }
+  updates: { rating?: number; memo?: string; key?: number }
 ): Promise<void> => {
   const versions = await getAllVersions();
   const versionIndex = versions.findIndex((v) => v.id === versionId);
@@ -189,7 +200,29 @@ export const updateVersion = async (
     if (updates.memo !== undefined) {
       versions[versionIndex].memo = updates.memo;
     }
+    if (updates.key !== undefined) {
+      versions[versionIndex].key = updates.key;
+    }
     await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
+
+    // 버전 키를 수정하면 곡의 내 키도 최근 의도로 반영
+    if (updates.key !== undefined) {
+      await updateSongKey(versions[versionIndex].songId, updates.key);
+    }
+  }
+};
+
+/** 곡의 내 키(myKey)를 직접 설정. undefined면 미설정으로 되돌림. */
+export const updateSongKey = async (
+  songId: string,
+  key: number | undefined
+): Promise<void> => {
+  const songs = await getAllSongs();
+  const songIndex = songs.findIndex((s) => s.id === songId);
+  if (songIndex !== -1) {
+    songs[songIndex].myKey = key;
+    songs[songIndex].updatedAt = new Date();
+    await AsyncStorage.setItem(KEYS.SONGS, JSON.stringify(songs));
   }
 };
 
@@ -225,6 +258,41 @@ export const createTrimmedVersion = async (
     range.end - range.start,
     source.memo,
     { waveform: source.waveform, trim: range, editedFrom: source.id }
+  );
+};
+
+// === 멀티 구간(cuts) 편집 — 비파괴 ===
+
+/** 버전에 삭제 구간(cuts)을 비파괴로 저장(원본 파일 그대로). */
+export const applyCutsToVersion = async (
+  versionId: string,
+  cuts: { start: number; end: number }[]
+): Promise<void> => {
+  const versions = await getAllVersions();
+  const idx = versions.findIndex((v) => v.id === versionId);
+  if (idx !== -1) {
+    versions[idx].cuts = cuts;
+    await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
+  }
+};
+
+/** cuts 메타를 가진 새 버전 생성(같은 원본 파일 참조, 비파괴). */
+export const createEditedVersion = async (
+  sourceVersionId: string,
+  cuts: { start: number; end: number }[]
+): Promise<string> => {
+  const source = await getVersion(sourceVersionId);
+  if (!source) throw new Error('원본 버전을 찾을 수 없습니다.');
+  // 비파괴: 원본 파일을 그대로 참조하므로 duration은 원본 길이를 유지한다.
+  // (편집 후 길이는 editedDuration(cuts, duration)으로 파생 계산)
+  return addVersion(
+    source.songId,
+    source.fileName,
+    source.storageUrl,
+    source.rating,
+    source.duration,
+    source.memo,
+    { waveform: source.waveform, cuts, editedFrom: source.id }
   );
 };
 
