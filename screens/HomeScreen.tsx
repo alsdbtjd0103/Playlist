@@ -232,6 +232,7 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
+          keyboardShouldPersistTaps="handled"
           data={filteredSongs}
           renderItem={renderSongCard}
           keyExtractor={(item) => item.id}

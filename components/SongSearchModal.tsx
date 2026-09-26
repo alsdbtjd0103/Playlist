@@ -144,6 +144,7 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
               </View>
 
               <FlatList
+                keyboardShouldPersistTaps="handled"
                 data={[]}
                 keyExtractor={() => 'x'}
                 renderItem={null as any}
