@@ -54,3 +54,54 @@ describe('parseManifest', () => {
     expect(() => parseManifest('{not json')).toThrow();
   });
 });
+
+import { planAudioEntries, backupProgressRatio, resolveAudioEntry } from '../lib/backup';
+
+describe('planAudioEntries (같은 녹음 파일은 한 번만 담기)', () => {
+  it('원본 파일이 같은 버전(트림 사본)은 같은 zip 경로를 공유한다', () => {
+    const orig = [
+      { id: 'v1', storageUrl: 'file:///rec/s1/a.m4a' },
+      { id: 'v2', storageUrl: 'file:///rec/s1/a.m4a' }, // v1을 트림한 사본
+      { id: 'v3', storageUrl: 'file:///rec/s1/b.m4a' },
+    ] as any[];
+    const { entries, pathByVersionId } = planAudioEntries(['v1', 'v2', 'v3'], orig);
+    expect(entries).toEqual([
+      { src: 'file:///rec/s1/a.m4a', path: 'audio/v1.m4a' },
+      { src: 'file:///rec/s1/b.m4a', path: 'audio/v3.m4a' },
+    ]);
+    expect(pathByVersionId.get('v2')).toBe('audio/v1.m4a');
+    expect(pathByVersionId.get('v3')).toBe('audio/v3.m4a');
+  });
+
+  it('원본 버전이 없으면 건너뛴다', () => {
+    const { entries, pathByVersionId } = planAudioEntries(['ghost'], []);
+    expect(entries).toEqual([]);
+    expect(pathByVersionId.has('ghost')).toBe(false);
+  });
+});
+
+describe('resolveAudioEntry (복원 시 zip 안 경로)', () => {
+  it('manifest의 audio/ 경로를 그대로 쓴다', () => {
+    expect(resolveAudioEntry({ id: 'v2', storageUrl: 'audio/v1.m4a' } as any)).toBe('audio/v1.m4a');
+  });
+  it('이상한 경로면 예전 규칙(audio/{id}.m4a)으로 되돌린다', () => {
+    expect(resolveAudioEntry({ id: 'v2', storageUrl: '../etc/passwd' } as any)).toBe('audio/v2.m4a');
+    expect(resolveAudioEntry({ id: 'v2', storageUrl: 'file:///x.m4a' } as any)).toBe('audio/v2.m4a');
+  });
+});
+
+describe('backupProgressRatio', () => {
+  it('백업: 복사 단계는 0~90%, 압축 단계는 90~100%', () => {
+    expect(backupProgressRatio({ phase: 'copy', done: 0, total: 10 })).toBeCloseTo(0);
+    expect(backupProgressRatio({ phase: 'copy', done: 5, total: 10 })).toBeCloseTo(0.45);
+    expect(backupProgressRatio({ phase: 'zip', done: 0.5, total: 1 })).toBeCloseTo(0.95);
+    expect(backupProgressRatio({ phase: 'done', done: 1, total: 1 })).toBe(1);
+  });
+  it('복원: 압축 해제 0~30%, 파일 복원 30~100%', () => {
+    expect(backupProgressRatio({ phase: 'unzip', done: 1, total: 1 })).toBeCloseTo(0.3);
+    expect(backupProgressRatio({ phase: 'restore', done: 1, total: 2 })).toBeCloseTo(0.65);
+  });
+  it('total이 0이어도 NaN 없이 해당 단계 시작점을 준다', () => {
+    expect(backupProgressRatio({ phase: 'copy', done: 0, total: 0 })).toBe(0);
+  });
+});

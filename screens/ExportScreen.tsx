@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
   Modal,
   FlatList,
@@ -15,7 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
 import { RootStackParamList, Song, Playlist } from '../types';
 import { getAllSongs, getPlaylists } from '../lib/database';
-import { buildBackup, BackupSelection } from '../lib/backup';
+import { buildBackup, BackupSelection, BackupProgress } from '../lib/backup';
+import BackupProgressOverlay from '../components/BackupProgressOverlay';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
 
@@ -27,6 +27,7 @@ export default function ExportScreen({ navigation }: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<BackupProgress | null>(null);
   const [picker, setPicker] = useState<PickerMode>(null);
   const [songs, setSongs] = useState<Song[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -34,8 +35,9 @@ export default function ExportScreen({ navigation }: Props) {
 
   const runExport = useCallback(async (sel: BackupSelection) => {
     try {
+      setProgress(null);
       setBusy(true);
-      const { uri } = await buildBackup(sel);
+      const { uri } = await buildBackup(sel, setProgress);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/zip', dialogTitle: 'plilog 백업' });
       } else {
@@ -182,12 +184,7 @@ export default function ExportScreen({ navigation }: Props) {
         </View>
       </Modal>
 
-      {busy && (
-        <View style={styles.busyOverlay}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.busyText}>백업을 만들고 있어요…</Text>
-        </View>
-      )}
+      {busy && <BackupProgressOverlay title="백업을 만들고 있어요" progress={progress} />}
     </SafeAreaView>
   );
 }
@@ -236,9 +233,4 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.sm,
   },
   confirmText: { ...typography.body, color: colors.onAccent, fontWeight: '700' },
-  busyOverlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-  },
-  busyText: { ...typography.body, color: '#fff' },
 });
