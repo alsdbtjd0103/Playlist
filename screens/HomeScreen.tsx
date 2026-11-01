@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList, SongWithVersions } from "../types";
-import { getAllSongs, getVersionsBySong, deleteSong } from "../lib/database";
+import { getSongsWithVersions, deleteSong } from "../lib/database";
 import { matchesSearch } from "../lib/search";
 import { useFocusEffect } from "@react-navigation/native";
 import { ColorTokens, spacing, borderRadius, typography } from "../lib/theme";
@@ -110,23 +110,16 @@ export default function HomeScreen({ navigation }: Props) {
 
   const fetchSongs = async () => {
     try {
-      const allSongs = await getAllSongs();
-      const songsWithVersions = await Promise.all(
-        allSongs.map(async (song) => {
-          const versions = await getVersionsBySong(song.id);
-          const latestVersion = versions[0];
-          const defaultVersion = song.defaultVersionId
-            ? versions.find((v) => v.id === song.defaultVersionId)
-            : undefined;
-
-          return {
-            ...song,
-            versions,
-            latestVersion,
-            defaultVersion,
-          };
-        })
-      );
+      // 곡마다 저장소 전체를 다시 읽으면 곡이 많을 때 화면이 멈추므로 한 번에 읽어 묶는다
+      const rows = await getSongsWithVersions();
+      const songsWithVersions = rows.map(({ song, versions }) => ({
+        ...song,
+        versions,
+        latestVersion: versions[0],
+        defaultVersion: song.defaultVersionId
+          ? versions.find((v) => v.id === song.defaultVersionId)
+          : undefined,
+      }));
 
       setSongs(songsWithVersions);
     } catch (error) {

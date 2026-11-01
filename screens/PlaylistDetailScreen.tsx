@@ -27,7 +27,7 @@ import {
   removeFromPlaylist,
   getAllSongs,
   getAllVersions,
-  addToPlaylist,
+  addManyToPlaylist,
   reorderPlaylistItems,
   updateSongDefaultVersion,
   PlaylistDetailItem,
@@ -48,7 +48,7 @@ const toPlayingTracks = (items: PlaylistItem[]): PlayingTrack[] =>
 
 type SortOrder = null | 'newest' | 'oldest';
 
-export default function PlaylistDetailScreen({ route }: Props) {
+export default function PlaylistDetailScreen({ route, navigation }: Props) {
   const { colors, scheme } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const wordColor = scheme === 'dark' ? colors.accent : colors.accentStrong;
@@ -72,6 +72,12 @@ export default function PlaylistDetailScreen({ route }: Props) {
   const fetchPlaylist = async () => {
     try {
       const data = await getPlaylistWithDetails(playlistId);
+      if (!data) {
+        // 삭제된 플레이리스트: 로딩 표시가 끝나지 않으므로 이전 화면으로 돌아간다
+        Alert.alert('알림', '플레이리스트를 찾을 수 없습니다.');
+        navigation.goBack();
+        return;
+      }
       setPlaylistData(data);
     } catch (error) {
       console.error('플레이리스트 로드 실패:', error);
@@ -120,16 +126,12 @@ export default function PlaylistDetailScreen({ route }: Props) {
     }
     try {
       setLoading(true);
-      const currentOrder = playlist.items.length;
-      const versionsArray = Array.from(selectedVersions);
-      for (let i = 0; i < versionsArray.length; i++) {
-        await addToPlaylist(playlistId, versionsArray[i], currentOrder + i);
-      }
+      const added = await addManyToPlaylist(playlistId, Array.from(selectedVersions));
       setAddModalVisible(false);
       setSelectedVersions(new Set());
       await fetchPlaylist();
-      logEvent('playlist_songs_added', { count: versionsArray.length });
-      Alert.alert('완료', `${versionsArray.length}개의 곡이 추가되었습니다.`);
+      logEvent('playlist_songs_added', { count: added });
+      Alert.alert('완료', `${added}개의 곡이 추가되었습니다.`);
     } catch (error) {
       console.error('곡 추가 실패:', error);
       Alert.alert('오류', '곡 추가에 실패했습니다.');

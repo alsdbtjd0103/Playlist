@@ -32,6 +32,8 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
   const [manualTitle, setManualTitle] = useState('');
   const [manualArtist, setManualArtist] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
+  const busyRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -46,14 +48,17 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (query.trim().length === 0) { setResults([]); setError(false); setLoading(false); return; }
     setLoading(true);
+    // 늦게 도착한 이전 검색 응답이 최신 결과를 덮어쓰지 않도록 요청 번호로 거른다
+    const requestId = ++requestIdRef.current;
     debounceRef.current = setTimeout(async () => {
       try {
         setError(false);
-        setResults(await searchTracks(query));
+        const tracks = await searchTracks(query);
+        if (requestId === requestIdRef.current) setResults(tracks);
       } catch {
-        setError(true); setResults([]);
+        if (requestId === requestIdRef.current) { setError(true); setResults([]); }
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) setLoading(false);
       }
     }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -72,7 +77,9 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
   const handlePickLocal = (song: Song) => { onNavigateToSong(song.id); onClose(); };
 
   const handlePickItunes = useCallback(async (t: ITunesTrack) => {
-    if (busy) return;
+    // state 는 다음 렌더 전까지 안 바뀌어 연타 시 곡이 두 번 추가되므로 ref 로 막는다
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const id = await addSong(t.trackName, t.artistName, {
@@ -82,12 +89,13 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
       onNavigateToSong(id); onClose();
     } catch {
       Alert.alert('오류', '곡 추가에 실패했습니다.');
-    } finally { setBusy(false); }
-  }, [busy, onNavigateToSong, onClose]);
+    } finally { busyRef.current = false; setBusy(false); }
+  }, [onNavigateToSong, onClose]);
 
   const handleManualSubmit = useCallback(async () => {
     if (manualTitle.trim().length === 0) { Alert.alert('알림', '곡 제목을 입력하세요.'); return; }
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const id = await addSong(manualTitle.trim(), manualArtist.trim() || undefined);
@@ -95,8 +103,8 @@ export function SongSearchModal({ visible, onClose, onNavigateToSong }: Props) {
       onNavigateToSong(id); onClose();
     } catch {
       Alert.alert('오류', '곡 추가에 실패했습니다.');
-    } finally { setBusy(false); }
-  }, [manualTitle, manualArtist, busy, onNavigateToSong, onClose]);
+    } finally { busyRef.current = false; setBusy(false); }
+  }, [manualTitle, manualArtist, onNavigateToSong, onClose]);
 
   const openManual = () => { setManualTitle(query.trim()); setMode('manual'); };
 

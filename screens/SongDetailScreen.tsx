@@ -164,6 +164,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
       const songData = await getSong(songId);
       if (!songData) {
         Alert.alert('오류', '곡을 찾을 수 없습니다.');
+        navigation.goBack(); // 그대로 두면 로딩 표시가 끝나지 않는다
         return;
       }
 
