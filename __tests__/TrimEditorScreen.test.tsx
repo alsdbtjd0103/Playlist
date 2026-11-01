@@ -6,6 +6,10 @@ jest.mock('expo-audio', () => ({
   useAudioPlayer: () => ({ play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(async () => {}) }),
   useAudioPlayerStatus: () => ({ currentTime: 0, duration: 10, playing: false, didJustFinish: false }),
 }));
+jest.mock('react-native-track-player', () => ({
+  __esModule: true,
+  default: { pause: jest.fn(async () => {}) },
+}));
 jest.mock('../lib/database', () => ({
   getVersion: jest.fn(),
   applyCutsToVersion: jest.fn(async () => {}),
@@ -43,7 +47,7 @@ it('cut 없이 저장하면 createEditedVersion([]) 호출(새 버전 저장 기
   const r = renderScreen();
   await waitFor(() => r.getByTestId('trim-save-button'));
   await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
-  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', []));
+  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', [], 10));
   expect(nav.goBack).toHaveBeenCalled();
 });
 
@@ -68,7 +72,7 @@ it('구간 추가 후 선택 삭제하면 다시 0개', async () => {
   // 추가 직후 선택 상태 → 삭제
   await act(async () => { fireEvent.press(r.getByTestId('trim-delete-cut-button')); });
   await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
-  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', []));
+  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', [], 10));
 });
 
 it('네이티브 미가용이면 실제로 잘라 저장 버튼이 없다', async () => {

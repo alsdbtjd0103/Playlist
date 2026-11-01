@@ -353,16 +353,23 @@ export const createTrimmedVersion = (
 
 // === 멀티 구간(cuts) 편집 — 비파괴 ===
 
-/** 버전에 삭제 구간(cuts)을 비파괴로 저장(원본 파일 그대로). */
+/**
+ * 버전에 삭제 구간(cuts)을 비파괴로 저장(원본 파일 그대로).
+ * duration 이 없는 예전 녹음은 재생할 때 cuts 를 건너뛸 수 없으므로, 편집기가 알아낸 길이를 함께 저장한다.
+ */
 export const applyCutsToVersion = (
   versionId: string,
-  cuts: { start: number; end: number }[]
+  cuts: { start: number; end: number }[],
+  knownDuration?: number
 ): Promise<void> =>
   serialized(async () => {
     const versions = await loadVersions();
     const idx = versions.findIndex((v) => v.id === versionId);
     if (idx !== -1) {
       versions[idx].cuts = cuts;
+      if (!versions[idx].duration && knownDuration && knownDuration > 0) {
+        versions[idx].duration = knownDuration;
+      }
       await AsyncStorage.setItem(KEYS.VERSIONS, JSON.stringify(versions));
     }
   });
@@ -370,7 +377,8 @@ export const applyCutsToVersion = (
 /** cuts 메타를 가진 새 버전 생성(같은 원본 파일 참조, 비파괴). */
 export const createEditedVersion = (
   sourceVersionId: string,
-  cuts: { start: number; end: number }[]
+  cuts: { start: number; end: number }[],
+  knownDuration?: number
 ): Promise<string> =>
   serialized(async () => {
   const source = (await loadVersions()).find((v) => v.id === sourceVersionId);
@@ -382,7 +390,7 @@ export const createEditedVersion = (
     source.fileName,
     source.storageUrl,
     source.rating,
-    source.duration,
+    source.duration || knownDuration,
     source.memo,
     { waveform: source.waveform, cuts, editedFrom: source.id }
   );

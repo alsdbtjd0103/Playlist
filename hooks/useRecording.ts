@@ -9,6 +9,8 @@ import {
   type RecordingStatus,
 } from 'expo-audio';
 import { normalizeWaveform } from '../lib/waveform';
+import { deleteAudioLocally } from '../lib/storage';
+import { setRecordingActive } from '../lib/recordingState';
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -16,6 +18,13 @@ export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 // pause()/record() 직후 잠시 stale 하므로, UI 분기는 폴링값이 아니라
 // 핸들러가 동기적으로 갱신하는 이 명시적 상태 머신을 단일 기준으로 삼는다.
 type RecordingPhase = 'idle' | 'recording' | 'paused' | 'stopped';
+
+export interface RecordingResult {
+  uri: string;
+  /** 초 단위(반올림) */
+  duration: number;
+  waveform: number[];
+}
 
 export interface UseRecordingReturn {
   // 상태
@@ -31,7 +40,8 @@ export interface UseRecordingReturn {
   startRecording: () => Promise<void>;
   pauseRecording: () => void;
   resumeRecording: () => void;
-  stopRecording: () => Promise<void>;
+  /** 정지 후 결과를 돌려준다(실패·이미 정지 상태면 null). 상태 갱신을 기다리지 않고 바로 저장할 때 쓴다. */
+  stopRecording: () => Promise<RecordingResult | null>;
   resetRecording: () => void;
   checkPermissions: () => Promise<void>;
 }
@@ -92,27 +102,42 @@ export function useRecording(): UseRecordingReturn {
 
   const updatePhase = (next: RecordingPhase) => {
     phaseRef.current = next;
+    setRecordingActive(next === 'recording' || next === 'paused');
     setPhase(next);
   };
 
-  const finalize = useCallback((uri: string | null | undefined, durationMs: number) => {
+  // 화면을 떠나면 녹음 중 플래그를 해제한다(남아 있으면 원격 재생이 계속 막힌다)
+  useEffect(() => () => setRecordingActive(false), []);
+
+  const finalize = useCallback((uri: string | null | undefined, durationMs: number): RecordingResult | null => {
     updatePhase('stopped');
     setFinalDurationMs(durationMs);
-    setWaveform(normalizeWaveform(meteringSamplesRef.current));
+    const bars = normalizeWaveform(meteringSamplesRef.current);
+    setWaveform(bars);
     if (uri && uri.length > 0) {
       setAudioUri(uri);
-    } else {
-      Alert.alert('오류', '녹음 파일을 찾을 수 없습니다.');
+      return { uri, duration: Math.round(durationMs / 1000), waveform: bars };
     }
+    Alert.alert('오류', '녹음 파일을 찾을 수 없습니다.');
+    return null;
   }, []);
 
   // 알림의 "Stop" 버튼(Android 포그라운드 서비스)처럼 앱 밖에서 녹음이 끝난 경우,
   // JS 상태는 여전히 'recording' 이라 화면이 멈춘 것처럼 보인다. 완료 이벤트로 동기화한다.
+  // Android 녹음기 오류(미디어 서버 종료, 다른 앱의 마이크 점유)도 같은 이벤트로 오는데,
+  // 이때 네이티브 녹음기는 정리되지 않아 다음 녹음이 "이미 준비됨" 오류로 계속 실패한다.
+  const recorderRef = useRef<ReturnType<typeof useAudioRecorder> | null>(null);
   const onRecorderStatus = useCallback(
     (status: RecordingStatus) => {
       if (!status.isFinished || stoppingRef.current) return;
       if (phaseRef.current !== 'recording' && phaseRef.current !== 'paused') return;
-      finalize(status.url, lastDurationMsRef.current);
+      const recorder = recorderRef.current;
+      const uri = status.url ?? recorder?.uri ?? null; // 오류여도 그때까지 녹음된 부분은 살린다
+      if (status.hasError) {
+        console.error('녹음 중 오류:', status.error);
+        recorder?.stop().catch(() => undefined);
+      }
+      finalize(uri, lastDurationMsRef.current);
     },
     [finalize],
   );
@@ -121,7 +146,10 @@ export function useRecording(): UseRecordingReturn {
     { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true },
     onRecorderStatus,
   );
-  const recorderState = useAudioRecorderState(audioRecorder, 100);
+  recorderRef.current = audioRecorder;
+  // 100ms 폴링은 녹음 모달 전체를 초당 10번 다시 그려 버벅이게 한다.
+  // 200ms 도 파형(80칸)·타이머 표시에는 충분하다.
+  const recorderState = useAudioRecorderState(audioRecorder, 200);
 
   // 오디오 모드 설정 (녹음 시작 시에도 완료를 보장하기 위해 다시 await 한다)
   useEffect(() => {
@@ -129,6 +157,24 @@ export function useRecording(): UseRecordingReturn {
       console.error('오디오 모드 설정 실패:', error);
     });
   }, []);
+
+  // iOS 는 전화·알람 등으로 오디오가 끊기면 녹음기를 네이티브에서 일시정지하고 알려주지 않는다.
+  // 그대로 두면 화면은 REC 인데 타이머가 멈춘 상태가 되므로, 실제 상태를 확인해 일시정지로 맞춘다.
+  useEffect(() => {
+    if (phase !== 'recording' || recorderState.isRecording) return;
+    const timer = setTimeout(() => {
+      if (phaseRef.current !== 'recording' || stoppingRef.current) return;
+      try {
+        if (!audioRecorder.getStatus().isRecording) {
+          updatePhase('paused');
+          Alert.alert('녹음 일시정지', '다른 소리(전화·알람 등) 때문에 녹음이 일시정지되었습니다. 재개 버튼을 눌러 이어서 녹음하세요.');
+        }
+      } catch {
+        // 상태 조회 실패 시 판단을 미룬다
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [phase, recorderState.isRecording, audioRecorder]);
 
   // 녹음 중 미터링 샘플·길이 수집
   useEffect(() => {
@@ -168,7 +214,14 @@ export function useRecording(): UseRecordingReturn {
         console.error('오디오 모드 설정 실패:', error);
       }
       await requestNotificationPermissionOnce();
-      await audioRecorder.prepareToRecordAsync();
+      try {
+        await audioRecorder.prepareToRecordAsync();
+      } catch (error: any) {
+        // 이전 녹음이 오류로 끝나 네이티브 녹음기가 준비된 채 남은 경우: 정리 후 한 번 재시도
+        if (!/prepared/i.test(String(error?.message ?? ''))) throw error;
+        await audioRecorder.stop().catch(() => undefined);
+        await audioRecorder.prepareToRecordAsync();
+      }
       audioRecorder.record();
       setPermissionStatus('granted');
       setAudioUri(null);
@@ -212,9 +265,9 @@ export function useRecording(): UseRecordingReturn {
     }
   };
 
-  const stopRecording = async () => {
-    if (stoppingRef.current) return; // 정지 버튼 연타 방지
-    if (phaseRef.current !== 'recording' && phaseRef.current !== 'paused') return;
+  const stopRecording = async (): Promise<RecordingResult | null> => {
+    if (stoppingRef.current) return null; // 정지 버튼 연타 방지
+    if (phaseRef.current !== 'recording' && phaseRef.current !== 'paused') return null;
     stoppingRef.current = true;
     try {
       let durationMs = lastDurationMsRef.current;
@@ -224,10 +277,20 @@ export function useRecording(): UseRecordingReturn {
         // getStatus 실패 시 마지막 폴링값 사용
       }
       await audioRecorder.stop();
-      finalize(audioRecorder.uri, durationMs);
+      return finalize(audioRecorder.uri, durationMs);
     } catch (error) {
+      // Android 는 시작 직후 정지하면 MediaRecorder.stop() 이 실패한다. 네이티브 녹음기는 이미
+      // 정리됐으므로 화면을 REC 상태로 두지 말고 처음으로 되돌린다(남은 파일은 재생 불가).
       console.error('녹음 중지 실패:', error);
-      Alert.alert('오류', '녹음 중지에 실패했습니다.');
+      const uri = audioRecorder.uri;
+      updatePhase('idle');
+      setAudioUri(null);
+      setFinalDurationMs(null);
+      meteringSamplesRef.current = [];
+      setWaveform([]);
+      if (uri) deleteAudioLocally(uri);
+      Alert.alert('녹음 실패', '녹음이 너무 짧거나 저장되지 않았습니다. 다시 녹음해 주세요.');
+      return null;
     } finally {
       stoppingRef.current = false;
     }

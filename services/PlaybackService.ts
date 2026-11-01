@@ -1,5 +1,6 @@
 import TrackPlayer, { Event } from 'react-native-track-player';
 import { skipWrapped } from './queueControl';
+import { isRecordingActive } from '../lib/recordingState';
 
 /**
  * TrackPlayer의 백그라운드 재생을 위한 서비스
@@ -7,6 +8,8 @@ import { skipWrapped } from './queueControl';
  */
 export async function PlaybackService() {
   TrackPlayer.addEventListener(Event.RemotePlay, () => {
+    // 녹음 중 이어폰·잠금화면 재생 버튼: 반주가 녹음에 섞이거나 iOS 에서 마이크 입력이 끊긴다
+    if (isRecordingActive()) return;
     TrackPlayer.play();
   });
 

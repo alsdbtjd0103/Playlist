@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import TrackPlayer from 'react-native-track-player';
 import { RootStackParamList, Version } from '../types';
 import { getVersion, applyCutsToVersion, createEditedVersion, addVersion } from '../lib/database';
 import {
@@ -84,6 +85,9 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
       previewingRef.current = false;
       return;
     }
+    // 플레이어(TrackPlayer)가 재생 중이면 멈춘다. 그대로 두면 오디오 포커스를 빼앗겼다가
+    // 미리듣기가 끝날 때 플레이어가 저절로 다시 재생된다.
+    await TrackPlayer.pause().catch(() => undefined);
     const start = nextKeepStart(0, cuts, duration) ?? 0;
     await player.seekTo(start);
     previewingRef.current = true;
@@ -112,10 +116,11 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       const safe = normalizeCuts(cuts, duration);
+      // 예전 녹음은 길이가 저장돼 있지 않아 재생 시 편집 구간을 못 건너뛰므로 알아낸 길이도 저장한다
       if (mode === 'overwrite') {
-        await applyCutsToVersion(version.id, safe);
+        await applyCutsToVersion(version.id, safe, duration);
       } else {
-        await createEditedVersion(version.id, safe);
+        await createEditedVersion(version.id, safe, duration);
       }
       navigation.goBack();
     } catch {

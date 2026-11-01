@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -41,8 +41,11 @@ export default function AudioPlayer({
 
   const hasEndedRef = useRef(false);
 
+  // 드래그하는 동안에는 폴링된 재생 위치로 슬라이더를 되돌리지 않는다(손잡이가 튀는 문제)
+  const [seekingValue, setSeekingValue] = useState<number | null>(null);
   const currentTime = progress.position;
   const duration = progress.duration;
+  const sliderValue = seekingValue ?? currentTime;
 
   // 곡 종료 감지
   React.useEffect(() => {
@@ -80,9 +83,17 @@ export default function AudioPlayer({
         style={styles.slider}
         minimumValue={0}
         maximumValue={duration}
-        value={currentTime}
+        value={sliderValue}
+        onSlidingStart={(value) => setSeekingValue(value)}
+        onValueChange={(value) => {
+          if (seekingValue !== null) setSeekingValue(value);
+        }}
         onSlidingComplete={async (value) => {
-          await seekTo(value);
+          try {
+            await seekTo(value);
+          } finally {
+            setSeekingValue(null);
+          }
         }}
         minimumTrackTintColor={colors.accent}
         maximumTrackTintColor={colors.border}
@@ -91,7 +102,7 @@ export default function AudioPlayer({
 
       {/* 시간 표시 */}
       <View style={styles.timeRow}>
-        <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+        <Text style={styles.timeText}>{formatTime(sliderValue)}</Text>
         <Text style={styles.timeText}>{formatTime(duration)}</Text>
       </View>
 

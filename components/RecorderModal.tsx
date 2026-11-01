@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { formatKey, clampKey, KEY_MIN, KEY_MAX } from '../lib/keyLabel';
+import { deleteAudioLocally } from '../lib/storage';
 
 interface RecorderModalProps {
   visible: boolean;
@@ -52,6 +53,9 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
   const [memo, setMemo] = useState('');
   const [key, setKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  // 버튼 연타 방지: state 는 다음 렌더 전까지 반영되지 않아 두 번째 탭이 통과한다
+  const startingRef = useRef(false);
+  const savingRef = useRef(false);
 
   // 모달이 열릴 때마다 곡의 현재 키를 스텝퍼 기본값으로 세팅
   useEffect(() => {
@@ -60,10 +64,16 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
 
   // 녹음 시작 시 플레이어 중지
   const handleStartRecording = async () => {
-    if (isPlaying) {
-      await togglePlayPause();
+    if (startingRef.current) return;
+    startingRef.current = true;
+    try {
+      if (isPlaying) {
+        await togglePlayPause();
+      }
+      await startRecording();
+    } finally {
+      startingRef.current = false;
     }
-    await startRecording();
   };
 
   useEffect(() => {
@@ -72,27 +82,67 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
     }
   }, [visible]);
 
-  const handleSave = async () => {
-    if (!audioUri) return;
-
+  const saveTake = async (take: { uri: string; duration: number; waveform: number[] }) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
-      await onSave(audioUri, rating, memo.trim() || undefined, waveform, recordingTime, key);
-      handleClose();
+      await onSave(take.uri, rating, memo.trim() || undefined, take.waveform, take.duration, key);
+      // 영구 위치로 복사가 끝났으므로 녹음기 임시 파일은 지운다(안 지우면 녹음마다 캐시에 쌓인다)
+      deleteAudioLocally(take.uri);
+      closeAndReset();
     } catch (error) {
       console.error('저장 실패:', error);
-      Alert.alert('오류', '녹음 저장에 실패했습니다.');
+      Alert.alert('오류', '녹음 저장에 실패했습니다. 녹음은 그대로 남아 있으니 다시 저장해 주세요.');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
-  const handleClose = () => {
+  const handleSave = () => {
+    if (!audioUri) return;
+    saveTake({ uri: audioUri, duration: recordingTime, waveform });
+  };
+
+  // 녹음 중에 닫으려 하면: 정지 후 바로 저장(별점·메모는 기본값, 나중에 수정 가능)
+  const stopAndSave = async () => {
+    const take = await stopRecording();
+    if (take) await saveTake(take);
+  };
+
+  const closeAndReset = () => {
     resetRecording();
     setRating(3);
     setMemo('');
     setKey(clampKey(defaultKey ?? 0));
     onClose();
+  };
+
+  const discard = () => {
+    if (audioUri) deleteAudioLocally(audioUri);
+    closeAndReset();
+  };
+
+  // 녹음 중이거나 저장 전 녹음이 있으면, 닫기·뒤로가기를 실수로 눌러도 녹음이 사라지지 않게
+  // 저장 / 버리기 / 계속을 고르게 한다(일반적인 녹음 앱의 닫기 확인 방식).
+  const handleClose = () => {
+    if (savingRef.current) return;
+    if (!isRecording && !isPaused && !audioUri) {
+      closeAndReset();
+      return;
+    }
+    const recordingNow = isRecording || isPaused;
+    Alert.alert(
+      recordingNow ? '녹음 중입니다' : '녹음을 저장하지 않았어요',
+      recordingNow ? '지금까지 녹음한 내용을 어떻게 할까요?' : '저장하지 않고 닫으면 녹음이 삭제됩니다.',
+      [
+        { text: recordingNow ? '계속 녹음' : '돌아가기', style: 'cancel' },
+        { text: '버리기', style: 'destructive', onPress: discard },
+        { text: '저장하고 닫기', onPress: recordingNow ? stopAndSave : handleSave },
+      ],
+      { cancelable: true },
+    );
   };
 
   const formatTime = (seconds: number) => {
@@ -295,7 +345,7 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
                   )}
                 </TouchableOpacity>
               </>
-            ) : (
+            ) : isRecording || isPaused ? null /* 녹음 중엔 정지 버튼 바로 아래 닫기 버튼을 숨겨 오탭을 막는다(상단 X 는 확인을 거친다) */ : (
               <TouchableOpacity
                 style={[styles.modalButton, styles.closeOnlyButton]}
                 onPress={handleClose}
