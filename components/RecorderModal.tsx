@@ -19,6 +19,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { formatKey, clampKey, KEY_MIN, KEY_MAX } from '../lib/keyLabel';
 import { deleteAudioLocally } from '../lib/storage';
+import { useSettings } from '../contexts/SettingsContext';
 
 interface RecorderModalProps {
   visible: boolean;
@@ -49,7 +50,8 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
 
   const { isPlaying, togglePlayPause } = usePlayer();
 
-  const [rating, setRating] = useState(3);
+  const { settings } = useSettings();
+  const [rating, setRating] = useState(settings.defaultRating);
   const [memo, setMemo] = useState('');
   const [key, setKey] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -113,7 +115,7 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
 
   const closeAndReset = () => {
     resetRecording();
-    setRating(3);
+    setRating(settings.defaultRating);
     setMemo('');
     setKey(clampKey(defaultKey ?? 0));
     onClose();
@@ -166,7 +168,13 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
           {/* 헤더 */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>녹음</Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <TouchableOpacity
+              onPress={handleClose}
+              style={styles.closeButton}
+              hitSlop={8}
+              accessibilityLabel="닫기"
+              testID="recorder-close"
+            >
               <Ionicons name="close" size={24} color={colors.textMuted} />
             </TouchableOpacity>
           </View>

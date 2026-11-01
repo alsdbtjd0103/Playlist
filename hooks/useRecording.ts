@@ -11,6 +11,11 @@ import {
 import { normalizeWaveform } from '../lib/waveform';
 import { deleteAudioLocally } from '../lib/storage';
 import { setRecordingActive } from '../lib/recordingState';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { getSettings } from '../lib/settings';
+import { haptic } from '../lib/haptics';
+
+const KEEP_AWAKE_TAG = 'recording';
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
@@ -109,6 +114,20 @@ export function useRecording(): UseRecordingReturn {
   // 화면을 떠나면 녹음 중 플래그를 해제한다(남아 있으면 원격 재생이 계속 막힌다)
   useEffect(() => () => setRecordingActive(false), []);
 
+  // 녹음(일시정지 포함) 중에는 설정에 따라 화면이 꺼지지 않게 한다.
+  const active = phase === 'recording' || phase === 'paused';
+  useEffect(() => {
+    if (!active || !getSettings().keepAwakeWhileRecording) return;
+    activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch((error) => console.warn('화면 켜짐 유지 실패:', error));
+    return () => {
+      try {
+        Promise.resolve(deactivateKeepAwake(KEEP_AWAKE_TAG)).catch(() => undefined);
+      } catch {
+        // 해제 실패는 무시(화면이 계속 켜져 있을 뿐)
+      }
+    };
+  }, [active]);
+
   const finalize = useCallback((uri: string | null | undefined, durationMs: number): RecordingResult | null => {
     updatePhase('stopped');
     setFinalDurationMs(durationMs);
@@ -142,10 +161,12 @@ export function useRecording(): UseRecordingReturn {
     [finalize],
   );
 
-  const audioRecorder = useAudioRecorder(
-    { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true },
-    onRecorderStatus,
-  );
+  // 녹음 품질은 훅이 처음 마운트될 때 한 번만 읽는다(녹음 중 설정이 바뀌어 녹음기가 다시 만들어지지 않게).
+  const [recordingOptions] = useState(() => ({
+    ...(getSettings().recordingQuality === 'low' ? RecordingPresets.LOW_QUALITY : RecordingPresets.HIGH_QUALITY),
+    isMeteringEnabled: true,
+  }));
+  const audioRecorder = useAudioRecorder(recordingOptions, onRecorderStatus);
   recorderRef.current = audioRecorder;
   // 100ms 폴링은 녹음 모달 전체를 초당 10번 다시 그려 버벅이게 한다.
   // 200ms 도 파형(80칸)·타이머 표시에는 충분하다.
@@ -226,6 +247,7 @@ export function useRecording(): UseRecordingReturn {
       setPermissionStatus('granted');
       setAudioUri(null);
       updatePhase('recording');
+      haptic('medium');
     } catch (error: any) {
       console.error('녹음 시작 실패:', error);
 
@@ -277,7 +299,9 @@ export function useRecording(): UseRecordingReturn {
         // getStatus 실패 시 마지막 폴링값 사용
       }
       await audioRecorder.stop();
-      return finalize(audioRecorder.uri, durationMs);
+      const result = finalize(audioRecorder.uri, durationMs);
+      if (result) haptic('success');
+      return result;
     } catch (error) {
       // Android 는 시작 직후 정지하면 MediaRecorder.stop() 이 실패한다. 네이티브 녹음기는 이미
       // 정리됐으므로 화면을 REC 상태로 두지 말고 처음으로 되돌린다(남은 파일은 재생 불가).
