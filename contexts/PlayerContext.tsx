@@ -182,9 +182,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, []);
 
+  // 재생할 수 없는 파일(지워졌거나 비어 있는 녹음)에서 큐 전체가 멈추지 않도록 다음 곡으로 넘긴다.
+  // 모든 곡이 연달아 실패하면 무한히 돌지 않게 멈춘다.
+  const errorStreakRef = useRef(0);
+  useEffect(() => {
+    const subscription = TrackPlayer.addEventListener(Event.PlaybackError, (event) => {
+      console.error('재생 오류:', event.code, event.message);
+      const state = playlistRef.current;
+      if (!state || state.items.length <= 1) return;
+      errorStreakRef.current += 1;
+      if (errorStreakRef.current >= state.items.length) return;
+      runQueueOp(() => skipWrapped(1)).catch((e) => console.error('다음 곡으로 넘기기 실패:', e));
+    });
+    return () => subscription.remove();
+  }, []);
+
   // 편집 구간(cut) 건너뛰기 + 마지막 남길 구간 끝 처리. 화면이 꺼져도 오는 네이티브 진행 이벤트로 판단한다.
   useEffect(() => {
     const subscription = TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {
+      if (event.position > 0) errorStreakRef.current = 0; // 정상 재생 중이면 오류 연속 횟수 초기화
       const state = playlistRef.current;
       const trackId = activeIdRef.current;
       if (!state || !trackId || pendingIdRef.current) return;

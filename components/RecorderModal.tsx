@@ -18,7 +18,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { formatKey, clampKey, KEY_MIN, KEY_MAX } from '../lib/keyLabel';
-import { deleteAudioLocally } from '../lib/storage';
+import { deleteAudioLocally, EmptyRecordingError } from '../lib/storage';
 import { useSettings } from '../contexts/SettingsContext';
 
 interface RecorderModalProps {
@@ -95,7 +95,14 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
       closeAndReset();
     } catch (error) {
       console.error('저장 실패:', error);
-      Alert.alert('오류', '녹음 저장에 실패했습니다. 녹음은 그대로 남아 있으니 다시 저장해 주세요.');
+      if (error instanceof EmptyRecordingError) {
+        // 다시 저장해도 소용없으므로 비우고 처음 상태로 돌린다
+        Alert.alert('녹음이 비어 있어요', '마이크로 들어온 소리가 없어 저장하지 못했어요. 마이크 권한·연결을 확인한 뒤 다시 녹음해 주세요.');
+        deleteAudioLocally(take.uri);
+        resetRecording();
+      } else {
+        Alert.alert('오류', '녹음 저장에 실패했습니다. 녹음은 그대로 남아 있으니 다시 저장해 주세요.');
+      }
     } finally {
       savingRef.current = false;
       setSaving(false);

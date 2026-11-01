@@ -10,6 +10,7 @@ jest.mock('react-native-track-player', () => {
     PlaybackQueueEnded: 'queue-ended',
     PlaybackActiveTrackChanged: 'active-changed',
     PlaybackProgressUpdated: 'progress',
+    PlaybackError: 'error',
   };
   const fn = (impl?: any) => jest.fn(impl ?? (async () => {}));
   const TP = {
@@ -194,5 +195,14 @@ describe('PlayerContext — 편집 구간·반복·종료 처리', () => {
     await waitFor(() => expect(TP.remove).toHaveBeenCalledWith([1]));
     expect(hook.result.current.playlistState?.items.map((i) => i.version.id)).toEqual(['a']);
     expect(TP.reset).not.toHaveBeenCalled();
+  });
+
+  it('재생할 수 없는 파일이면 다음 곡으로 넘기고, 모든 곡이 실패하면 멈춘다', async () => {
+    await setup([item('a'), item('b')]);
+    TP.skip.mockClear();
+    await emit('error', { code: 'android-io-file-not-found', message: 'Source error' });
+    await waitFor(() => expect(TP.skip).toHaveBeenCalledTimes(1));
+    await emit('error', { code: 'android-io-file-not-found', message: 'Source error' });
+    expect(TP.skip).toHaveBeenCalledTimes(1);
   });
 });
