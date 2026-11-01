@@ -3,15 +3,15 @@ import TrackPlayer, {
   State,
   Event,
   usePlaybackState,
-  useProgress,
   RepeatMode,
   Capability,
   AppKilledPlaybackBehavior,
 } from 'react-native-track-player';
 import { Song, Version } from '../types';
-import { getEffectiveCuts, nextKeepStart } from '../lib/trim';
+import { getEffectiveCuts, nextKeepStart, cutPlaybackAction } from '../lib/trim';
 import { planQueueSync } from '../lib/queueNav';
-import { skipWrapped } from '../services/queueControl';
+import { skipWrapped, runQueueOp } from '../services/queueControl';
+import { onVersionUpdated } from '../lib/playbackStore';
 
 /** 버전의 첫 재생 시작 지점(첫 남길 구간의 시작). cuts/레거시 trim 모두 대응. */
 const playStartOf = (version: Version): number => {
@@ -60,6 +60,14 @@ const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 let isPlayerSetup = false;
 
+const cutsOf = (version: Version) => {
+  const dur = version.duration || 0;
+  return dur > 0 ? getEffectiveCuts(version, dur) : [];
+};
+
+const toNativeRepeat = (mode: 'none' | 'one' | 'all'): RepeatMode =>
+  mode === 'one' ? RepeatMode.Track : mode === 'all' ? RepeatMode.Queue : RepeatMode.Off;
+
 const toTrack = (item: PlayingTrack) => ({
   id: item.version.id,
   url: item.version.storageUrl,
@@ -77,19 +85,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // 이벤트 리스너가 항상 최신 재생목록을 보도록 ref로도 보관 (리스너 재구독 사이의 이벤트 유실 방지)
   const playlistRef = useRef<PlaylistState | null>(null);
   const activeIdRef = useRef<string | null>(null);
-  // TrackPlayer 큐 조작(reset/add/remove/skip)이 서로 끼어들지 않도록 직렬화
-  const opChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  // setPlaylist 가 큐를 새로 채우는 동안, 목표 곡이 아닌 곡의 트랙 변경 이벤트(add 직후 0번 곡 등)는
+  // 무시한다. 그러지 않으면 엉뚱한 곡 제목이 잠깐 뜨고 그 곡의 시작 위치로 seek 되어 버린다.
+  const pendingIdRef = useRef<string | null>(null);
+  // 편집 구간(cut) 처리 상태: 곡이 바뀐 직후 진행값은 이전 곡 위치일 수 있어, 남길 구간 안의
+  // 위치를 한 번 확인(armed)한 뒤에만 판단한다. ended 는 같은 곡 끝 처리를 한 번만 하기 위함.
+  const cutStateRef = useRef<{ id: string | null; armed: boolean; ended: boolean }>({
+    id: null,
+    armed: false,
+    ended: false,
+  });
 
   const setPlaylistState = useCallback((next: PlaylistState | null) => {
     playlistRef.current = next;
     setPlaylistStateRaw(next);
   }, []);
 
-  const runExclusive = useCallback(<T,>(op: () => Promise<T>): Promise<T> => {
-    const run = opChainRef.current.then(op, op);
-    opChainRef.current = run.catch(() => {});
-    return run;
-  }, []);
+  // 원격 명령(PlaybackService)과 같은 줄을 써서 큐 조작이 서로 끼어들지 않게 한다
+  const runExclusive = useCallback(<T,>(op: () => Promise<T>): Promise<T> => runQueueOp(op), []);
 
   const playbackState = usePlaybackState();
   const isPlaying = playbackState.state === State.Playing;
@@ -103,9 +116,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        // androidWakeMode 1(WAKE_MODE_LOCAL): 화면이 꺼진 뒤 기기 절전으로 재생이 끊기지 않게 한다.
+        // 타입 정의에는 없지만 네이티브(MusicService)가 읽는 옵션이다.
         await TrackPlayer.setupPlayer({
           autoHandleInterruptions: true,
-        });
+          androidWakeMode: 1,
+        } as Parameters<typeof TrackPlayer.setupPlayer>[0]);
       } catch (error: any) {
         // JS 리로드 등으로 네이티브 플레이어가 이미 살아 있으면 그대로 사용한다
         if (!String(error?.message ?? error).includes('already been initialized')) {
@@ -124,12 +140,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             Capability.SkipToNext,
             Capability.SkipToPrevious,
           ],
-          compactCapabilities: [
-            Capability.Play,
-            Capability.Pause,
-            Capability.SkipToNext,
-            Capability.SkipToPrevious,
-          ],
           notificationCapabilities: [
             Capability.Play,
             Capability.Pause,
@@ -139,6 +149,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           android: {
             appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
           },
+          // 편집 구간 건너뛰기를 네이티브 진행 이벤트로 처리한다. JS 타이머(useProgress)는
+          // Android 에서 화면이 꺼지면 멈춰, 잠금 상태에서 잘라낸 구간이 그대로 재생됐다.
+          progressUpdateEventInterval: 0.25,
         });
 
         isPlayerSetup = true;
@@ -151,12 +164,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setupPlayer();
   }, []);
 
-  // 큐 끝 도달 → 전체 반복이면 처음으로
+  // 큐 끝 도달 → 전체 반복이면 처음으로 (네이티브 반복 모드와 어긋난 경우의 안전망)
   useEffect(() => {
     const subscription = TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
-      if (playlistRef.current?.repeatMode === 'all') {
+      const state = playlistRef.current;
+      if (state?.repeatMode === 'all' && state.items.length > 0) {
         try {
-          await TrackPlayer.skip(0);
+          await TrackPlayer.skip(0, playStartOf(state.items[0].version));
           await TrackPlayer.play();
         } catch (error) {
           console.error('처음 곡 재생 실패:', error);
@@ -167,6 +181,72 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => subscription.remove();
   }, []);
 
+  // 편집 구간(cut) 건너뛰기 + 마지막 남길 구간 끝 처리. 화면이 꺼져도 오는 네이티브 진행 이벤트로 판단한다.
+  useEffect(() => {
+    const subscription = TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {
+      const state = playlistRef.current;
+      const trackId = activeIdRef.current;
+      if (!state || !trackId || pendingIdRef.current) return;
+      const item = state.items.find((it) => it.version.id === trackId);
+      if (!item) return;
+      const cuts = cutsOf(item.version);
+      if (cuts.length === 0) return;
+
+      const cut = cutStateRef.current;
+      if (cut.id !== trackId) {
+        cutStateRef.current = { id: trackId, armed: false, ended: false };
+      }
+      const dur = item.version.duration || 0;
+      const action = cutPlaybackAction(event.position, cuts, dur);
+      const st = cutStateRef.current;
+      if (!st.armed) {
+        if (action.type === 'none') st.armed = true;
+        return;
+      }
+      if (action.type === 'none') {
+        // 남길 구간 안으로 돌아왔으면(슬라이더로 되감기 등) 끝 처리를 다시 할 수 있게 한다
+        st.ended = false;
+        return;
+      }
+      if (action.type === 'seek') {
+        TrackPlayer.seekTo(action.to).catch(() => undefined);
+        return;
+      }
+      if (st.ended) return;
+      st.ended = true;
+      const index = state.items.findIndex((it) => it.version.id === trackId);
+      const isLast = index === state.items.length - 1;
+      if (state.repeatMode === 'one') {
+        st.ended = false;
+        TrackPlayer.seekTo(playStartOf(item.version)).catch(() => undefined);
+      } else if (state.repeatMode === 'none' && isLast) {
+        TrackPlayer.pause().catch(() => undefined);
+      } else {
+        runQueueOp(() => skipWrapped(1)).catch((e) => console.error('다음 곡 재생 실패:', e));
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  // 편집기에서 cuts 를 저장하면 재생 중인 큐의 버전 정보도 바꿔, 바뀐 구간을 바로 건너뛰게 한다
+  useEffect(
+    () =>
+      onVersionUpdated((version) => {
+        const state = playlistRef.current;
+        if (state?.items.some((it) => it.version.id === version.id)) {
+          setPlaylistState({
+            ...state,
+            items: state.items.map((it) => (it.version.id === version.id ? { ...it, version } : it)),
+          });
+        }
+        setCurrentTrackState((current) =>
+          current && current.version.id === version.id ? { ...current, version } : current
+        );
+      }),
+    [setPlaylistState]
+  );
+
   // 트랙 변경 → 현재 곡/인덱스 갱신. 인덱스가 아니라 트랙 id로 찾는다
   // (큐 재정렬 중에는 같은 곡의 인덱스만 바뀔 수 있으므로).
   useEffect(() => {
@@ -174,16 +254,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const state = playlistRef.current;
       const trackId = event.track?.id as string | undefined;
       if (!state || !trackId) return;
+      if (pendingIdRef.current && trackId !== pendingIdRef.current) return;
       const index = state.items.findIndex((it) => it.version.id === trackId);
       if (index === -1) return;
 
       const newTrack = state.items[index];
+      // 같은 곡이 반복 재생된 경우(한 곡 반복, 한 곡짜리 전체 반복)도 시작 위치로 보내야 한다
+      const repeated = event.lastTrack?.id === trackId && activeIdRef.current === trackId;
       const trackChanged = activeIdRef.current !== trackId;
       activeIdRef.current = trackId;
       if (state.currentIndex !== index) {
         setPlaylistState({ ...state, currentIndex: index });
       }
-      if (!trackChanged) return;
+      if (!trackChanged && !repeated) return;
+      cutStateRef.current = { id: trackId, armed: false, ended: false };
 
       setCurrentTrackState(newTrack);
       const startAt = playStartOf(newTrack.version);
@@ -228,13 +312,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     try {
       if (isPlaying) {
         await TrackPlayer.pause();
-      } else {
-        await TrackPlayer.play();
+        return;
       }
+      const state = playlistRef.current;
+      if (playbackState.state === State.Ended && state && state.items.length > 0) {
+        // 큐가 끝난 뒤 플레이어는 '종료' 상태라 play() 만으로는 아무 일도 일어나지 않는다
+        await runExclusive(() => TrackPlayer.skip(0, playStartOf(state.items[0].version)));
+      } else {
+        // 편집된 곡의 끝(잘라낸 꼬리)에서 멈춘 경우: 잘라낸 부분을 재생하지 말고 곡 처음으로
+        const item = state?.items.find((it) => it.version.id === activeIdRef.current);
+        if (item) {
+          const cuts = cutsOf(item.version);
+          const { position } = await TrackPlayer.getProgress();
+          if (cuts.length > 0 && nextKeepStart(position, cuts, item.version.duration || 0) === null) {
+            await TrackPlayer.seekTo(playStartOf(item.version));
+          }
+        }
+      }
+      await TrackPlayer.play();
     } catch (error) {
       console.error('재생/일시정지 실패:', error);
     }
-  }, [isPlaying]);
+  }, [isPlaying, playbackState.state, runExclusive]);
 
   const seekTo = useCallback(async (seconds: number) => {
     try {
@@ -272,21 +371,26 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     await runExclusive(async () => {
       try {
         // 새 큐의 이벤트가 이전 목록으로 해석되지 않도록 상태를 먼저 교체한다
+        const startItem = items[startIndex] ?? items[0];
         setPlaylistState({ items, currentIndex: startIndex, repeatMode: 'all', sourceId });
-        activeIdRef.current = items[startIndex]?.version.id ?? null;
-        setCurrentTrackState(items[startIndex]);
+        pendingIdRef.current = startItem.version.id;
+        activeIdRef.current = startItem.version.id;
+        cutStateRef.current = { id: startItem.version.id, armed: false, ended: false };
+        setCurrentTrackState(startItem);
 
         await TrackPlayer.reset();
+        // 반복 모드는 reset 으로 초기화되지 않아 이전 큐의 '한 곡 반복'이 남는다. 화면 표시('all')와 맞춘다.
+        await TrackPlayer.setRepeatMode(RepeatMode.Queue);
         await TrackPlayer.add(items.map(toTrack));
-        await TrackPlayer.skip(startIndex);
+        // 곡 이동과 시작 위치 이동을 한 번에(따로 seek 하면 다른 곡에 적용될 수 있다)
+        await TrackPlayer.skip(startIndex, playStartOf(startItem.version));
         await TrackPlayer.play();
-        const startItem = items[startIndex];
-        const startAt = startItem ? playStartOf(startItem.version) : 0;
-        if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
 
         setIsExpanded(true);
       } catch (error) {
         console.error('플레이리스트 설정 실패:', error);
+      } finally {
+        pendingIdRef.current = null;
       }
     });
   }, [isReady, runExclusive, setPlaylistState]);
@@ -348,19 +452,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [runExclusive]);
 
   const setRepeatMode = useCallback(async (mode: 'none' | 'one' | 'all') => {
-    let trackPlayerMode: RepeatMode;
-    switch (mode) {
-      case 'one':
-        trackPlayerMode = RepeatMode.Track;
-        break;
-      case 'all':
-        trackPlayerMode = RepeatMode.Queue;
-        break;
-      default:
-        trackPlayerMode = RepeatMode.Off;
-    }
     try {
-      await TrackPlayer.setRepeatMode(trackPlayerMode);
+      await TrackPlayer.setRepeatMode(toNativeRepeat(mode));
     } catch (error) {
       console.error('반복 모드 설정 실패:', error);
     }
@@ -406,71 +499,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   return (
     <PlayerContext.Provider value={value}>
       {children}
-      <CutsWatcher
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
-        hasNext={(playlistState?.items.length ?? 0) > 1}
-        playNext={playNext}
-      />
     </PlayerContext.Provider>
   );
-}
-
-// 재생 중 cut 구간 건너뛰기 + 마지막 남길 구간 끝 도달 시 다음 곡/정지.
-// 진행률 폴링을 이 컴포넌트에 가둬서 Provider 전체(모든 usePlayer 소비자)가 폴링마다 리렌더되지 않게 한다.
-function CutsWatcher({
-  currentTrack,
-  isPlaying,
-  hasNext,
-  playNext,
-}: {
-  currentTrack: PlayingTrack | null;
-  isPlaying: boolean;
-  hasNext: boolean;
-  playNext: () => void;
-}) {
-  const version = currentTrack?.version;
-  const trackId = version?.id ?? null;
-  const dur = version?.duration || 0;
-  const cuts = useMemo(
-    () => (version && dur > 0 ? getEffectiveCuts(version, dur) : []),
-    [version, dur]
-  );
-  const progress = useProgress(cuts.length > 0 ? 500 : 60_000);
-  // 곡이 바뀐 직후의 progress는 이전 곡 위치일 수 있으므로,
-  // 현재 곡에서 남길 구간 안의 위치를 한 번 확인한 뒤에만 건너뛰기/종료 판정을 한다.
-  const armedRef = useRef<string | null>(null);
-  const handledRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    armedRef.current = null;
-    handledRef.current = null;
-  }, [trackId]);
-
-  useEffect(() => {
-    if (!trackId || cuts.length === 0 || !isPlaying) return;
-    const pos = progress.position;
-    const nxt = nextKeepStart(pos, cuts, dur);
-    if (armedRef.current !== trackId) {
-      if (nxt !== null && Math.abs(nxt - pos) < 0.05) armedRef.current = trackId;
-      return;
-    }
-    if (nxt === null) {
-      // 마지막 남길 구간의 끝 → 종료 처리
-      if (handledRef.current === trackId) return;
-      handledRef.current = trackId;
-      if (hasNext) {
-        playNext();
-      } else {
-        TrackPlayer.pause().catch(() => {});
-      }
-    } else if (nxt > pos + 0.05) {
-      // cut 진입 → 다음 남길 지점으로 건너뛰기
-      TrackPlayer.seekTo(nxt).catch(() => {});
-    }
-  }, [progress.position, cuts, dur, trackId, isPlaying, hasNext, playNext]);
-
-  return null;
 }
 
 export function usePlayer() {

@@ -74,6 +74,23 @@ export function nextKeepStart(pos: number, cuts: TrimRange[], duration: number):
   return pos < duration - EPS ? pos : null;
 }
 
+export type CutPlaybackAction =
+  | { type: 'none' }
+  | { type: 'seek'; to: number }
+  | { type: 'end' };
+
+/**
+ * 재생 위치에서 할 일: cut 안이면 다음 남길 지점으로 이동, 마지막 남길 구간을 지났으면 곡 끝 처리.
+ * (진행 이벤트가 0.25초 간격이라 cut 시작을 조금 넘겨 감지되는 것은 정상이다)
+ */
+export function cutPlaybackAction(pos: number, cuts: TrimRange[], duration: number): CutPlaybackAction {
+  if (cuts.length === 0 || duration <= 0) return { type: 'none' };
+  const nxt = nextKeepStart(pos, cuts, duration);
+  if (nxt === null) return { type: 'end' };
+  if (nxt > pos + 0.05) return { type: 'seek', to: nxt };
+  return { type: 'none' };
+}
+
 /** 레거시 단일 trim{start,end}("[start,end] 남김")을 cuts("앞뒤 삭제")로 변환. */
 export function legacyTrimToCuts(
   trim: { start: number; end: number } | undefined,

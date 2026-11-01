@@ -15,6 +15,7 @@ import {
   nextKeepStart,
 } from '../lib/trim';
 import { isAudioEditAvailable, renderCutsToFile } from '../lib/nativeAudioEdit';
+import { notifyVersionUpdated } from '../lib/playbackStore';
 import { WaveformView } from '../components/WaveformView';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
@@ -119,6 +120,8 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
       // 예전 녹음은 길이가 저장돼 있지 않아 재생 시 편집 구간을 못 건너뛰므로 알아낸 길이도 저장한다
       if (mode === 'overwrite') {
         await applyCutsToVersion(version.id, safe, duration);
+        // 재생 중인 큐에 이 버전이 있으면 바뀐 구간을 바로 반영한다
+        notifyVersionUpdated({ ...version, cuts: safe, duration: version.duration || duration });
       } else {
         await createEditedVersion(version.id, safe, duration);
       }
