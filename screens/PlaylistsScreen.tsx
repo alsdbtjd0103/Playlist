@@ -22,6 +22,7 @@ import PressableScale from '../components/PressableScale';
 import Chip from '../components/Chip';
 import ErrorState from '../components/ErrorState';
 import { SkeletonList } from '../components/Skeleton';
+import { withObjectParticle } from '../lib/josa';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Playlists'>;
 
@@ -138,7 +139,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
     setMenuTarget(null);
     setPlaylists((prev) => (prev ? prev.filter((p) => p.id !== target.id) : prev));
     pendingDeletesRef.current.add(target.id);
-    showUndo(`「${target.name}」을 삭제했어요`, {
+    showUndo(`${withObjectParticle(target.name, `「${target.name}」`)} 삭제했어요`, {
       onUndo: () => {
         pendingDeletesRef.current.delete(target.id);
         fetchPlaylists();

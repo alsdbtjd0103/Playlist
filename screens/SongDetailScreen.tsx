@@ -37,6 +37,7 @@ import { isNativeDenoiseAvailable } from '../lib/nativeDenoise';
 import { getVersionNumberMap, formatVersionNumber } from '../lib/versionLabel';
 import { isAudioEditAvailable, renderCutsToFile } from '../lib/nativeAudioEdit';
 import { getEffectiveCuts } from '../lib/trim';
+import { withObjectParticle } from '../lib/josa';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SongDetail'>;
 
@@ -335,7 +336,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
         defaultVersion: wasDefault ? undefined : prev.defaultVersion,
       };
     });
-    toast.showUndo(`버전 ${label}을 삭제했어요`, {
+    toast.showUndo(`${withObjectParticle(label, `버전 ${label}`)} 삭제했어요`, {
       onUndo: () => {
         pendingDeleteIds.current.delete(version.id);
         fetchSong();

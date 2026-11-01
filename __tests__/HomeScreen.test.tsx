@@ -78,7 +78,7 @@ describe('HomeScreen', () => {
       fireEvent.press(screen.getByTestId('song-more-s1'));
       await act(async () => { fireEvent.press(screen.getByTestId('song-sheet-delete')); });
       expect(screen.queryByTestId('song-card-s1')).toBeNull();
-      expect(screen.getByText('「다람쥐」을 삭제했어요')).toBeTruthy();
+      expect(screen.getByText('「다람쥐」를 삭제했어요')).toBeTruthy();
       expect(deleteSong).not.toHaveBeenCalled();
       await act(async () => { jest.advanceTimersByTime(UNDO_WINDOW_MS); });
       expect(deleteSong).toHaveBeenCalledWith('s1');

@@ -44,6 +44,7 @@ import Chip from '../components/Chip';
 import ErrorState from '../components/ErrorState';
 import { SkeletonList } from '../components/Skeleton';
 import { logEvent, logScreen } from '../lib/analytics';
+import { withObjectParticle } from '../lib/josa';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PlaylistDetail'>;
 
@@ -300,7 +301,7 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
 
   const confirmDeletePlaylist = () => {
     setPlaylistMenuVisible(false);
-    afterSheetClose(() => Alert.alert('플레이리스트 삭제', `「${playlist?.name ?? ''}」을 삭제할까요?\n녹음 파일은 지워지지 않아요.`, [
+    afterSheetClose(() => Alert.alert('플레이리스트 삭제', `${withObjectParticle(playlist?.name ?? '', `「${playlist?.name ?? ''}」`)} 삭제할까요?\n녹음 파일은 지워지지 않아요.`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',

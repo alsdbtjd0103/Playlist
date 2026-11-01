@@ -33,6 +33,7 @@ import Chip from "../components/Chip";
 import ErrorState from "../components/ErrorState";
 import { SkeletonList } from "../components/Skeleton";
 import { logScreen } from "../lib/analytics";
+import { withObjectParticle } from '../lib/josa';
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -205,7 +206,7 @@ export default function HomeScreen({ navigation }: Props) {
     setSheet(null);
     pendingDeletesRef.current.add(song.id);
     setSongs((prev) => (prev ? prev.filter((s) => s.id !== song.id) : prev));
-    showUndo(`「${song.title}」을 삭제했어요`, {
+    showUndo(`${withObjectParticle(song.title, `「${song.title}」`)} 삭제했어요`, {
       onUndo: () => {
         pendingDeletesRef.current.delete(song.id);
         fetchSongs();
