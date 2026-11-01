@@ -191,7 +191,10 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScreenHeader onAddPress={() => setSearchModalVisible(true)} />
+      <ScreenHeader
+        showWordmark
+        actions={[{ icon: "add", label: "곡 추가", onPress: () => setSearchModalVisible(true), testID: "add-song-button" }]}
+      />
 
       {/* 검색 바 */}
       {songs.length > 0 && (

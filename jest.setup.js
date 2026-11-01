@@ -112,3 +112,6 @@ jest.mock('expo-constants', () => ({
 // --- reanimated 4 / worklets: 네이티브 없이 동작하는 공식 목 ---
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
+
+// --- safe-area-context: Provider 없이도 0 인셋으로 동작하는 공식 목 ---
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);

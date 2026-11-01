@@ -153,7 +153,10 @@ export default function PlaylistsScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScreenHeader onAddPress={() => setModalVisible(true)} />
+      <ScreenHeader
+        title="플레이리스트"
+        actions={[{ icon: 'add', label: '플레이리스트 만들기', onPress: () => setModalVisible(true), testID: 'add-playlist-button' }]}
+      />
 
       {playlists.length === 0 ? (
         <View style={styles.emptyContainer}>
