@@ -15,6 +15,7 @@ import { usePlayer } from '../contexts/PlayerContext';
 import AudioPlayer from './AudioPlayer';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
+import { formatVersionNumber } from '../lib/versionLabel';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
@@ -88,6 +89,16 @@ export default function NowPlayingScreen() {
             translateY.setValue(gestureState.dy);
           }
         },
+        // 다른 응답자가 제스처를 가져가도 offset이 남아 시트가 어중간한 위치에 걸리지 않게 정리
+        onPanResponderTerminate: () => {
+          translateY.flattenOffset();
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 65,
+            friction: 11,
+          }).start();
+        },
         onPanResponderRelease: (_, gestureState) => {
           translateY.flattenOffset();
           if (gestureState.dy > DISMISS_THRESHOLD || gestureState.vy > 0.5) {
@@ -119,6 +130,8 @@ export default function NowPlayingScreen() {
           paddingBottom: insets.bottom,
         },
       ]}
+      // 접힌 상태(화면 아래로 내려간 상태)에서는 터치를 받지 않는다
+      pointerEvents={isExpanded ? 'auto' : 'none'}
       {...panResponder.panHandlers}
     >
       {/* 드래그 핸들 영역 */}
@@ -144,8 +157,12 @@ export default function NowPlayingScreen() {
       {/* 곡 정보 */}
       <View style={styles.songInfo}>
         <Text style={styles.songTitle}>{currentTrack.song.title}</Text>
-        {currentTrack.song.artist && (
-          <Text style={styles.songArtist}>{currentTrack.song.artist}</Text>
+        {(currentTrack.song.artist || currentTrack.versionNumber) && (
+          <Text style={styles.songArtist}>
+            {[currentTrack.song.artist, formatVersionNumber(currentTrack.versionNumber)]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
         )}
         <View style={styles.ratingContainer}>
           <Ionicons name="star" size={16} color={colors.star} />
@@ -160,16 +177,19 @@ export default function NowPlayingScreen() {
 
       {/* 오디오 플레이어 */}
       <View style={styles.playerContainer}>
-        <AudioPlayer
-          onTrackEnd={isPlaylistMode ? handleTrackEnd : undefined}
-          showPlaylistControls={isPlaylistMode}
-          onPrevious={playPrevious}
-          onNext={playNext}
-          repeatMode={playlistState?.repeatMode}
-          onRepeatModeChange={cycleRepeatMode}
-          shuffleMode={shuffleMode}
-          onShuffleModeChange={toggleShuffleMode}
-        />
+        {/* 펼쳐져 있을 때만 마운트: 접힌 상태에서 250ms 진행률 폴링이 계속 돌지 않게 */}
+        {isExpanded && (
+          <AudioPlayer
+            onTrackEnd={isPlaylistMode ? handleTrackEnd : undefined}
+            showPlaylistControls={isPlaylistMode}
+            onPrevious={playPrevious}
+            onNext={playNext}
+            repeatMode={playlistState?.repeatMode}
+            onRepeatModeChange={cycleRepeatMode}
+            shuffleMode={shuffleMode}
+            onShuffleModeChange={toggleShuffleMode}
+          />
+        )}
       </View>
 
       {/* 메모 */}

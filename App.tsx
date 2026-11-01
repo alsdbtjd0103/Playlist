@@ -31,6 +31,7 @@ import PlaylistsScreen from './screens/PlaylistsScreen';
 import PlaylistDetailScreen from './screens/PlaylistDetailScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ExportScreen from './screens/ExportScreen';
+import MemoFeedScreen from './screens/MemoFeedScreen';
 import { PlayerProvider } from './contexts/PlayerContext';
 import MiniPlayer from './components/MiniPlayer';
 import NowPlayingScreen from './components/NowPlayingScreen';
@@ -41,6 +42,7 @@ const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator<RootStackParamList>();
 const PlaylistStack = createNativeStackNavigator<RootStackParamList>();
 const SettingsStack = createNativeStackNavigator<RootStackParamList>();
+const MemoStack = createNativeStackNavigator<RootStackParamList>();
 
 function HomeStackScreen({ bg }: { bg: string }) {
   return (
@@ -75,6 +77,22 @@ function PlaylistStackScreen({ bg }: { bg: string }) {
       <PlaylistStack.Screen name="Playlists" component={PlaylistsScreen} />
       <PlaylistStack.Screen name="PlaylistDetail" component={PlaylistDetailScreen} />
     </PlaylistStack.Navigator>
+  );
+}
+
+function MemoStackScreen({ bg }: { bg: string }) {
+  return (
+    <MemoStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'fade',
+        animationDuration: 150,
+        contentStyle: { backgroundColor: bg },
+        gestureEnabled: false,
+      }}
+    >
+      <MemoStack.Screen name="MemoFeed" component={MemoFeedScreen} />
+    </MemoStack.Navigator>
   );
 }
 
@@ -130,6 +148,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           const iconByRoute: Record<string, any> = {
             HomeTab: 'musical-notes',
             PlaylistTab: 'albums',
+            MemoTab: 'document-text-outline',
             SettingsTab: 'settings-outline',
           };
           const iconName = iconByRoute[route.name] ?? 'ellipse';
@@ -248,6 +267,9 @@ function AppInner() {
                 </Tab.Screen>
                 <Tab.Screen name="PlaylistTab" options={{ tabBarLabel: '플레이리스트' }}>
                   {() => <PlaylistStackScreen bg={colors.bg} />}
+                </Tab.Screen>
+                <Tab.Screen name="MemoTab" options={{ tabBarLabel: '메모' }}>
+                  {() => <MemoStackScreen bg={colors.bg} />}
                 </Tab.Screen>
                 <Tab.Screen name="SettingsTab" options={{ tabBarLabel: '설정' }}>
                   {() => <SettingsStackScreen bg={colors.bg} />}

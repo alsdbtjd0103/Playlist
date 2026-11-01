@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlayer } from '../contexts/PlayerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, typography } from '../lib/theme';
+import { formatVersionNumber } from '../lib/versionLabel';
 
 export default function MiniPlayer() {
   const { colors } = useTheme();
@@ -28,9 +29,11 @@ export default function MiniPlayer() {
         <Text style={styles.title} numberOfLines={1}>
           {currentTrack.song.title}
         </Text>
-        {currentTrack.song.artist && (
+        {(currentTrack.song.artist || currentTrack.versionNumber) && (
           <Text style={styles.artist} numberOfLines={1}>
-            {currentTrack.song.artist}
+            {[currentTrack.song.artist, formatVersionNumber(currentTrack.versionNumber)]
+              .filter(Boolean)
+              .join(' · ')}
           </Text>
         )}
       </View>

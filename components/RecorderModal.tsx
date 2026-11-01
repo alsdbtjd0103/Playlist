@@ -9,6 +9,8 @@ import {
   TextInput,
   Alert,
   Linking,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRecording } from '../hooks/useRecording';
@@ -106,7 +108,10 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
       transparent={true}
       onRequestClose={handleClose}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <View style={styles.modalContent}>
           {/* 헤더 */}
           <View style={styles.modalHeader}>
@@ -300,7 +305,7 @@ export default function RecorderModal({ visible, onClose, onSave, defaultKey }: 
             )}
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

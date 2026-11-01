@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,7 +11,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { RootStackParamList } from '../types';
-import { restoreBackup } from '../lib/backup';
+import { restoreBackup, BackupProgress } from '../lib/backup';
+import BackupProgressOverlay from '../components/BackupProgressOverlay';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography } from '../lib/theme';
 
@@ -22,6 +22,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<BackupProgress | null>(null);
 
   const handleImport = useCallback(async () => {
     try {
@@ -30,8 +31,9 @@ export default function SettingsScreen({ navigation }: Props) {
         copyToCacheDirectory: true,
       });
       if (res.canceled || !res.assets?.[0]) return;
+      setProgress(null);
       setBusy(true);
-      const r = await restoreBackup(res.assets[0].uri);
+      const r = await restoreBackup(res.assets[0].uri, setProgress);
       const skipped = r.songs.skipped + r.versions.skipped + r.playlists.skipped + r.playlistItems.skipped;
       Alert.alert(
         '복원 완료',
@@ -82,12 +84,7 @@ export default function SettingsScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      {busy && (
-        <View style={styles.busyOverlay}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.busyText}>백업을 복원하고 있어요…</Text>
-        </View>
-      )}
+      {busy && <BackupProgressOverlay title="백업을 복원하고 있어요" progress={progress} />}
     </SafeAreaView>
   );
 }
@@ -114,9 +111,4 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
   rowTextWrap: { flex: 1 },
   rowLabel: { ...typography.body, color: colors.text, fontWeight: '600' },
   rowDesc: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  busyOverlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-  },
-  busyText: { ...typography.body, color: '#fff' },
 });

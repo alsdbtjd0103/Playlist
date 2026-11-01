@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import TrackPlayer, {
   State,
   Event,
@@ -10,6 +10,8 @@ import TrackPlayer, {
 } from 'react-native-track-player';
 import { Song, Version } from '../types';
 import { getEffectiveCuts, nextKeepStart } from '../lib/trim';
+import { planQueueSync } from '../lib/queueNav';
+import { skipWrapped } from '../services/queueControl';
 
 /** 버전의 첫 재생 시작 지점(첫 남길 구간의 시작). cuts/레거시 trim 모두 대응. */
 const playStartOf = (version: Version): number => {
@@ -20,15 +22,18 @@ const playStartOf = (version: Version): number => {
   return nextKeepStart(0, cuts, dur) ?? 0;
 };
 
-interface PlayingTrack {
+export interface PlayingTrack {
   song: Song;
   version: Version;
+  versionNumber?: number;
 }
 
 interface PlaylistState {
   items: PlayingTrack[];
   currentIndex: number;
   repeatMode: 'none' | 'one' | 'all';
+  // 큐를 만든 출처(플레이리스트 id). 같은 출처의 순서 변경을 재생 중인 큐에 반영할 때 사용.
+  sourceId?: string;
 }
 
 interface PlayerContextType {
@@ -36,14 +41,13 @@ interface PlayerContextType {
   isPlaying: boolean;
   isExpanded: boolean;
   playlistState: PlaylistState | null;
-  currentTime: number;
-  duration: number;
   setCurrentTrack: (track: PlayingTrack | null) => void;
   setIsPlaying: (playing: boolean) => void;
   expandPlayer: () => void;
   minimizePlayer: () => void;
   closePlayer: () => void;
-  setPlaylist: (items: PlayingTrack[], startIndex?: number) => void;
+  setPlaylist: (items: PlayingTrack[], startIndex?: number, sourceId?: string) => void;
+  syncQueue: (sourceId: string, items: PlayingTrack[]) => void;
   playNext: () => void;
   playPrevious: () => void;
   setRepeatMode: (mode: 'none' | 'one' | 'all') => void;
@@ -56,20 +60,39 @@ const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 let isPlayerSetup = false;
 
+const toTrack = (item: PlayingTrack) => ({
+  id: item.version.id,
+  url: item.version.storageUrl,
+  title: item.song.title,
+  artist: item.song.artist || '알 수 없는 아티스트',
+  duration: item.version.duration,
+});
+
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [currentTrack, setCurrentTrackState] = useState<PlayingTrack | null>(null);
-  const [isPlaying, setIsPlayingState] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [playlistState, setPlaylistState] = useState<PlaylistState | null>(null);
+  const [playlistState, setPlaylistStateRaw] = useState<PlaylistState | null>(null);
   const [isReady, setIsReady] = useState(false);
 
-  const trimEndHandledRef = useRef<string | null>(null);
+  // 이벤트 리스너가 항상 최신 재생목록을 보도록 ref로도 보관 (리스너 재구독 사이의 이벤트 유실 방지)
+  const playlistRef = useRef<PlaylistState | null>(null);
+  const activeIdRef = useRef<string | null>(null);
+  // TrackPlayer 큐 조작(reset/add/remove/skip)이 서로 끼어들지 않도록 직렬화
+  const opChainRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  const setPlaylistState = useCallback((next: PlaylistState | null) => {
+    playlistRef.current = next;
+    setPlaylistStateRaw(next);
+  }, []);
+
+  const runExclusive = useCallback(<T,>(op: () => Promise<T>): Promise<T> => {
+    const run = opChainRef.current.then(op, op);
+    opChainRef.current = run.catch(() => {});
+    return run;
+  }, []);
 
   const playbackState = usePlaybackState();
-  const progress = useProgress();
-
-  const currentTime = progress.position || 0;
-  const duration = progress.duration || 0;
+  const isPlaying = playbackState.state === State.Playing;
 
   // TrackPlayer 초기화
   useEffect(() => {
@@ -83,7 +106,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         await TrackPlayer.setupPlayer({
           autoHandleInterruptions: true,
         });
+      } catch (error: any) {
+        // JS 리로드 등으로 네이티브 플레이어가 이미 살아 있으면 그대로 사용한다
+        if (!String(error?.message ?? error).includes('already been initialized')) {
+          console.error('TrackPlayer 초기화 실패:', error);
+          return;
+        }
+      }
 
+      try {
         await TrackPlayer.updateOptions({
           capabilities: [
             Capability.Play,
@@ -113,89 +144,104 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         isPlayerSetup = true;
         setIsReady(true);
       } catch (error) {
-        console.error('TrackPlayer 초기화 실패:', error);
+        console.error('TrackPlayer 옵션 설정 실패:', error);
       }
     }
 
     setupPlayer();
   }, []);
 
-  // 재생 상태 동기화
-  useEffect(() => {
-    const state = playbackState.state;
-    setIsPlayingState(state === State.Playing);
-  }, [playbackState.state]);
-
-  // 트랙 종료 이벤트 리스너
+  // 큐 끝 도달 → 전체 반복이면 처음으로
   useEffect(() => {
     const subscription = TrackPlayer.addEventListener(Event.PlaybackQueueEnded, async () => {
-      if (playlistState) {
-        const { repeatMode } = playlistState;
-        if (repeatMode === 'all') {
+      if (playlistRef.current?.repeatMode === 'all') {
+        try {
           await TrackPlayer.skip(0);
           await TrackPlayer.play();
+        } catch (error) {
+          console.error('처음 곡 재생 실패:', error);
         }
       }
     });
 
     return () => subscription.remove();
-  }, [playlistState]);
+  }, []);
 
-  // 트랙 변경 이벤트 리스너
+  // 트랙 변경 → 현재 곡/인덱스 갱신. 인덱스가 아니라 트랙 id로 찾는다
+  // (큐 재정렬 중에는 같은 곡의 인덱스만 바뀔 수 있으므로).
   useEffect(() => {
     const subscription = TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async (event) => {
-      if (event.index !== undefined && playlistState) {
-        const newTrack = playlistState.items[event.index];
-        if (newTrack) {
-          setCurrentTrackState(newTrack);
-          setPlaylistState(prev => prev ? { ...prev, currentIndex: event.index! } : null);
-          const startAt = playStartOf(newTrack.version);
-          if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
+      const state = playlistRef.current;
+      const trackId = event.track?.id as string | undefined;
+      if (!state || !trackId) return;
+      const index = state.items.findIndex((it) => it.version.id === trackId);
+      if (index === -1) return;
+
+      const newTrack = state.items[index];
+      const trackChanged = activeIdRef.current !== trackId;
+      activeIdRef.current = trackId;
+      if (state.currentIndex !== index) {
+        setPlaylistState({ ...state, currentIndex: index });
+      }
+      if (!trackChanged) return;
+
+      setCurrentTrackState(newTrack);
+      const startAt = playStartOf(newTrack.version);
+      if (startAt > 0) {
+        try {
+          await TrackPlayer.seekTo(startAt);
+        } catch (error) {
+          console.error('편집 시작 위치 이동 실패:', error);
         }
       }
     });
 
     return () => subscription.remove();
-  }, [playlistState]);
+  }, [setPlaylistState]);
 
   const setCurrentTrack = useCallback(async (track: PlayingTrack | null) => {
     if (!isReady) return;
 
-    if (!track) {
-      await TrackPlayer.reset();
-      setCurrentTrackState(null);
-      return;
-    }
+    await runExclusive(async () => {
+      if (!track) {
+        await TrackPlayer.reset();
+        activeIdRef.current = null;
+        setCurrentTrackState(null);
+        return;
+      }
 
-    try {
-      await TrackPlayer.reset();
-      await TrackPlayer.add({
-        id: track.version.id,
-        url: track.version.storageUrl,
-        title: track.song.title,
-        artist: track.song.artist || '알 수 없는 아티스트',
-        duration: track.version.duration,
-      });
-      await TrackPlayer.play();
-      const startAt = playStartOf(track.version);
-      if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
-      setCurrentTrackState(track);
-    } catch (error) {
-      console.error('트랙 설정 실패:', error);
-    }
-  }, [isReady]);
+      try {
+        await TrackPlayer.reset();
+        activeIdRef.current = track.version.id;
+        await TrackPlayer.add(toTrack(track));
+        await TrackPlayer.play();
+        const startAt = playStartOf(track.version);
+        if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
+        setCurrentTrackState(track);
+      } catch (error) {
+        console.error('트랙 설정 실패:', error);
+      }
+    });
+  }, [isReady, runExclusive]);
 
   const togglePlayPause = useCallback(async () => {
-    const state = playbackState.state;
-    if (state === State.Playing) {
-      await TrackPlayer.pause();
-    } else {
-      await TrackPlayer.play();
+    try {
+      if (isPlaying) {
+        await TrackPlayer.pause();
+      } else {
+        await TrackPlayer.play();
+      }
+    } catch (error) {
+      console.error('재생/일시정지 실패:', error);
     }
-  }, [playbackState.state]);
+  }, [isPlaying]);
 
   const seekTo = useCallback(async (seconds: number) => {
-    await TrackPlayer.seekTo(seconds);
+    try {
+      await TrackPlayer.seekTo(seconds);
+    } catch (error) {
+      console.error('탐색 실패:', error);
+    }
   }, []);
 
   const expandPlayer = useCallback(() => {
@@ -207,102 +253,99 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const closePlayer = useCallback(async () => {
-    await TrackPlayer.reset();
-    setCurrentTrackState(null);
-    setIsPlayingState(false);
-    setIsExpanded(false);
-    setPlaylistState(null);
-  }, []);
+    await runExclusive(async () => {
+      try {
+        await TrackPlayer.reset();
+      } catch (error) {
+        console.error('플레이어 종료 실패:', error);
+      }
+      activeIdRef.current = null;
+      setCurrentTrackState(null);
+      setIsExpanded(false);
+      setPlaylistState(null);
+    });
+  }, [runExclusive, setPlaylistState]);
 
-  const setPlaylist = useCallback(async (items: PlayingTrack[], startIndex = 0) => {
+  const setPlaylist = useCallback(async (items: PlayingTrack[], startIndex = 0, sourceId?: string) => {
     if (!isReady || items.length === 0) return;
 
-    try {
-      await TrackPlayer.reset();
+    await runExclusive(async () => {
+      try {
+        // 새 큐의 이벤트가 이전 목록으로 해석되지 않도록 상태를 먼저 교체한다
+        setPlaylistState({ items, currentIndex: startIndex, repeatMode: 'all', sourceId });
+        activeIdRef.current = items[startIndex]?.version.id ?? null;
+        setCurrentTrackState(items[startIndex]);
 
-      const tracks = items.map(item => ({
-        id: item.version.id,
-        url: item.version.storageUrl,
-        title: item.song.title,
-        artist: item.song.artist || '알 수 없는 아티스트',
-        duration: item.version.duration,
-      }));
-
-      await TrackPlayer.add(tracks);
-      await TrackPlayer.skip(startIndex);
-      await TrackPlayer.play();
-      const startItem = items[startIndex];
-      if (startItem) {
-        const startAt = playStartOf(startItem.version);
+        await TrackPlayer.reset();
+        await TrackPlayer.add(items.map(toTrack));
+        await TrackPlayer.skip(startIndex);
+        await TrackPlayer.play();
+        const startItem = items[startIndex];
+        const startAt = startItem ? playStartOf(startItem.version) : 0;
         if (startAt > 0) { await TrackPlayer.seekTo(startAt); }
-      }
 
-      setPlaylistState({
-        items,
-        currentIndex: startIndex,
-        repeatMode: 'all',
-      });
-      setCurrentTrackState(items[startIndex]);
-      setIsExpanded(true);
-    } catch (error) {
-      console.error('플레이리스트 설정 실패:', error);
-    }
-  }, [isReady]);
+        setIsExpanded(true);
+      } catch (error) {
+        console.error('플레이리스트 설정 실패:', error);
+      }
+    });
+  }, [isReady, runExclusive, setPlaylistState]);
+
+  // 재생 중인 큐가 sourceId에서 온 것이면, 현재 곡을 끊지 않고 나머지 순서/구성을 items에 맞춘다.
+  const syncQueue = useCallback(async (sourceId: string, items: PlayingTrack[]) => {
+    await runExclusive(async () => {
+      const state = playlistRef.current;
+      if (!state || state.sourceId !== sourceId) return;
+
+      try {
+        const [queue, activeIndex] = await Promise.all([
+          TrackPlayer.getQueue(),
+          TrackPlayer.getActiveTrackIndex(),
+        ]);
+        if (activeIndex === undefined) return;
+        const currentId = queue[activeIndex]?.id as string | undefined;
+        const current = state.items.find((it) => it.version.id === currentId);
+        if (!currentId || !current) return;
+
+        const plan = planQueueSync(items.map((it) => it.version.id), currentId);
+        const nextItems = plan.currentInTarget ? items : [current, ...items];
+        const sameOrder =
+          nextItems.length === queue.length &&
+          nextItems.every((it, i) => it.version.id === queue[i]?.id);
+
+        setPlaylistState({ ...state, items: nextItems, currentIndex: plan.currentIndex });
+        if (sameOrder) return;
+
+        const byId = new Map(items.map((it) => [it.version.id, it]));
+        const others = queue.map((_, i) => i).filter((i) => i !== activeIndex);
+        if (others.length > 0) await TrackPlayer.remove(others);
+        if (plan.after.length > 0) await TrackPlayer.add(plan.after.map((id) => toTrack(byId.get(id)!)));
+        if (plan.before.length > 0) await TrackPlayer.add(plan.before.map((id) => toTrack(byId.get(id)!)), 0);
+      } catch (error) {
+        console.error('재생 큐 동기화 실패:', error);
+      }
+    });
+  }, [runExclusive, setPlaylistState]);
 
   const playNext = useCallback(async () => {
-    if (!playlistState) return;
-    const { currentIndex, items } = playlistState;
-    if (items.length === 0) return;
-    const nextIndex = currentIndex >= items.length - 1 ? 0 : currentIndex + 1;
-    try {
-      await TrackPlayer.skip(nextIndex);
-      await TrackPlayer.play();
-    } catch (error) {
-      console.error('다음 곡 재생 실패:', error);
-    }
-  }, [playlistState]);
-
-  // 재생 중 cut 구간 건너뛰기 + 마지막 남길 구간 끝 도달 시 정지/다음 곡
-  useEffect(() => {
-    const version = currentTrack?.version;
-    if (!version || !isPlaying) return;
-    const dur = version.duration || 0;
-    if (dur <= 0) return;
-    const cuts = getEffectiveCuts(version, dur);
-    if (cuts.length === 0) return;
-    const nxt = nextKeepStart(progress.position, cuts, dur);
-    if (nxt === null) {
-      // 마지막 남길 구간의 끝 → 종료 처리
-      if (trimEndHandledRef.current === version.id) return; // already handled for this track
-      trimEndHandledRef.current = version.id;
-      if (playlistState && playlistState.items.length > 1) {
-        playNext();
-      } else {
-        TrackPlayer.pause();
+    await runExclusive(async () => {
+      try {
+        await skipWrapped(1);
+      } catch (error) {
+        console.error('다음 곡 재생 실패:', error);
       }
-    } else if (nxt > progress.position + 0.05) {
-      // cut 진입 → 다음 남길 지점으로 건너뛰기
-      TrackPlayer.seekTo(nxt);
-    }
-  }, [progress.position, currentTrack, isPlaying, playlistState, playNext]);
-
-  // 트랙 변경 시 trim 종료 처리 플래그 초기화
-  useEffect(() => {
-    trimEndHandledRef.current = null;
-  }, [currentTrack?.version.id]);
+    });
+  }, [runExclusive]);
 
   const playPrevious = useCallback(async () => {
-    if (!playlistState) return;
-    const { currentIndex, items } = playlistState;
-    if (items.length === 0) return;
-    const prevIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
-    try {
-      await TrackPlayer.skip(prevIndex);
-      await TrackPlayer.play();
-    } catch (error) {
-      console.error('이전 곡 재생 실패:', error);
-    }
-  }, [playlistState]);
+    await runExclusive(async () => {
+      try {
+        await skipWrapped(-1);
+      } catch (error) {
+        console.error('이전 곡 재생 실패:', error);
+      }
+    });
+  }, [runExclusive]);
 
   const setRepeatMode = useCallback(async (mode: 'none' | 'one' | 'all') => {
     let trackPlayerMode: RepeatMode;
@@ -316,44 +359,118 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       default:
         trackPlayerMode = RepeatMode.Off;
     }
-    await TrackPlayer.setRepeatMode(trackPlayerMode);
-    setPlaylistState(prev => prev ? { ...prev, repeatMode: mode } : null);
-  }, []);
+    try {
+      await TrackPlayer.setRepeatMode(trackPlayerMode);
+    } catch (error) {
+      console.error('반복 모드 설정 실패:', error);
+    }
+    const state = playlistRef.current;
+    if (state) setPlaylistState({ ...state, repeatMode: mode });
+  }, [setPlaylistState]);
 
   const handleTrackEnd = useCallback(() => {
     // TrackPlayer가 자동으로 처리
   }, []);
 
-  const setIsPlaying = useCallback((playing: boolean) => {
-    setIsPlayingState(playing);
+  const setIsPlaying = useCallback((_playing: boolean) => {
+    // 재생 상태는 TrackPlayer의 playbackState에서 파생된다 (호환용 no-op)
   }, []);
 
+  const value = useMemo(
+    () => ({
+      currentTrack,
+      isPlaying,
+      isExpanded,
+      playlistState,
+      setCurrentTrack,
+      setIsPlaying,
+      expandPlayer,
+      minimizePlayer,
+      closePlayer,
+      setPlaylist,
+      syncQueue,
+      playNext,
+      playPrevious,
+      setRepeatMode,
+      handleTrackEnd,
+      togglePlayPause,
+      seekTo,
+    }),
+    [
+      currentTrack, isPlaying, isExpanded, playlistState, setCurrentTrack, setIsPlaying,
+      expandPlayer, minimizePlayer, closePlayer, setPlaylist, syncQueue, playNext,
+      playPrevious, setRepeatMode, handleTrackEnd, togglePlayPause, seekTo,
+    ]
+  );
+
   return (
-    <PlayerContext.Provider
-      value={{
-        currentTrack,
-        isPlaying,
-        isExpanded,
-        playlistState,
-        currentTime,
-        duration,
-        setCurrentTrack,
-        setIsPlaying,
-        expandPlayer,
-        minimizePlayer,
-        closePlayer,
-        setPlaylist,
-        playNext,
-        playPrevious,
-        setRepeatMode,
-        handleTrackEnd,
-        togglePlayPause,
-        seekTo,
-      }}
-    >
+    <PlayerContext.Provider value={value}>
       {children}
+      <CutsWatcher
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+        hasNext={(playlistState?.items.length ?? 0) > 1}
+        playNext={playNext}
+      />
     </PlayerContext.Provider>
   );
+}
+
+// 재생 중 cut 구간 건너뛰기 + 마지막 남길 구간 끝 도달 시 다음 곡/정지.
+// 진행률 폴링을 이 컴포넌트에 가둬서 Provider 전체(모든 usePlayer 소비자)가 폴링마다 리렌더되지 않게 한다.
+function CutsWatcher({
+  currentTrack,
+  isPlaying,
+  hasNext,
+  playNext,
+}: {
+  currentTrack: PlayingTrack | null;
+  isPlaying: boolean;
+  hasNext: boolean;
+  playNext: () => void;
+}) {
+  const version = currentTrack?.version;
+  const trackId = version?.id ?? null;
+  const dur = version?.duration || 0;
+  const cuts = useMemo(
+    () => (version && dur > 0 ? getEffectiveCuts(version, dur) : []),
+    [version, dur]
+  );
+  const progress = useProgress(cuts.length > 0 ? 500 : 60_000);
+  // 곡이 바뀐 직후의 progress는 이전 곡 위치일 수 있으므로,
+  // 현재 곡에서 남길 구간 안의 위치를 한 번 확인한 뒤에만 건너뛰기/종료 판정을 한다.
+  const armedRef = useRef<string | null>(null);
+  const handledRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    armedRef.current = null;
+    handledRef.current = null;
+  }, [trackId]);
+
+  useEffect(() => {
+    if (!trackId || cuts.length === 0 || !isPlaying) return;
+    const pos = progress.position;
+    const nxt = nextKeepStart(pos, cuts, dur);
+    if (armedRef.current !== trackId) {
+      if (nxt !== null && Math.abs(nxt - pos) < 0.05) armedRef.current = trackId;
+      return;
+    }
+    if (nxt === null) {
+      // 마지막 남길 구간의 끝 → 종료 처리
+      if (handledRef.current === trackId) return;
+      handledRef.current = trackId;
+      if (hasNext) {
+        playNext();
+      } else {
+        TrackPlayer.pause().catch(() => {});
+      }
+    } else if (nxt > pos + 0.05) {
+      // cut 진입 → 다음 남길 지점으로 건너뛰기
+      TrackPlayer.seekTo(nxt).catch(() => {});
+    }
+  }, [progress.position, cuts, dur, trackId, isPlaying, hasNext, playNext]);
+
+  return null;
 }
 
 export function usePlayer() {

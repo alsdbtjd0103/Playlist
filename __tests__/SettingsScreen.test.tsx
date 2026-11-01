@@ -8,6 +8,7 @@ import * as DocumentPicker from 'expo-document-picker';
 
 jest.mock('../lib/backup', () => ({
   restoreBackup: jest.fn(async () => ({ songs: { added: 1, skipped: 0 }, versions: { added: 2, skipped: 1 }, playlists: { added: 0, skipped: 0 }, playlistItems: { added: 0, skipped: 0 }, audioRestored: 2 })),
+  backupProgressRatio: jest.requireActual('../lib/backup').backupProgressRatio,
 }));
 const nav = { navigate: jest.fn() };
 const renderScreen = () => render(
@@ -28,7 +29,7 @@ describe('SettingsScreen', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { getByTestId } = renderScreen();
     fireEvent.press(getByTestId('settings-import'));
-    await waitFor(() => expect(restoreBackup).toHaveBeenCalledWith('file:///b.zip'));
+    await waitFor(() => expect(restoreBackup).toHaveBeenCalledWith('file:///b.zip', expect.any(Function)));
     await waitFor(() => expect(alertSpy).toHaveBeenCalled()); // 완료 요약
   });
   it('가져오기 취소 시 restoreBackup 미호출', async () => {

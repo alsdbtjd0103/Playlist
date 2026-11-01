@@ -71,4 +71,5 @@ export type RootStackParamList = {
   Denoise: { versionId: string };
   Settings: undefined;
   Export: undefined;
+  MemoFeed: undefined;
 };

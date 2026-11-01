@@ -70,6 +70,8 @@ jest.mock('@expo/vector-icons', () => {
 jest.mock('react-native-zip-archive', () => ({
   zip: jest.fn(async (_src, dest) => dest),
   unzip: jest.fn(async (_src, dest) => dest),
+  subscribe: jest.fn(() => ({ remove: jest.fn() })),
+  NO_COMPRESSION: 0,
 }));
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: null })),

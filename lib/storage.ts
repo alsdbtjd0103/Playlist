@@ -1,4 +1,5 @@
 import { Paths, Directory, File } from 'expo-file-system';
+import { copyAsync } from 'expo-file-system/legacy';
 
 /**
  * 오디오 파일을 로컬 파일 시스템에 저장
@@ -24,8 +25,8 @@ export const saveAudioLocally = async (
   }
 
   const targetFile = new File(recordingsDir, fileName);
-  const sourceFile = new File(audioUri);
-  await sourceFile.copy(targetFile);
+  // File.copy는 동기라 큰 파일이면 JS 스레드가 멈춘다 → 비동기 복사
+  await copyAsync({ from: new File(audioUri).uri, to: targetFile.uri });
 
   return { fileName, localUri: targetFile.uri };
 };
