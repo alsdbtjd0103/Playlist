@@ -43,6 +43,7 @@ jest.mock('react-native-track-player', () => {
 });
 
 import TrackPlayer from 'react-native-track-player';
+import { updateSettings, DEFAULT_SETTINGS } from '../lib/settings';
 import { PlayerProvider, usePlayer, type PlayingTrack } from '../contexts/PlayerContext';
 
 const TP = TrackPlayer as unknown as Record<string, jest.Mock>;
@@ -73,7 +74,8 @@ async function setup(items: PlayingTrack[], startIndex = 0) {
   return hook;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await updateSettings(DEFAULT_SETTINGS);
   jest.clearAllMocks();
   for (const k of Object.keys(mockHandlers)) delete mockHandlers[k];
   mockState = 'playing';
@@ -144,5 +146,31 @@ describe('PlayerContext — 편집 구간·반복·종료 처리', () => {
     });
     expect(TP.seekTo).toHaveBeenLastCalledWith(5);
     expect(TP.play).toHaveBeenCalled();
+  });
+
+  it('한 곡만 재생하면 반복하지 않고, 기본 설정에서는 전체화면을 열지 않는다', async () => {
+    const hook = await setup([item('a')]);
+    expect(TP.setRepeatMode).toHaveBeenCalledWith(0);
+    expect(hook.result.current.playlistState?.repeatMode).toBe('none');
+    expect(hook.result.current.isExpanded).toBe(false);
+  });
+
+  it('설정에서 켜면 재생할 때 전체화면 플레이어를 연다', async () => {
+    await updateSettings({ autoOpenPlayer: true });
+    const hook = await setup([item('a'), item('b')]);
+    expect(hook.result.current.isExpanded).toBe(true);
+  });
+
+  it('여러 곡 재생 중 고른 반복 모드를 다음 재생에도 쓴다', async () => {
+    const hook = await setup([item('a'), item('b')]);
+    await act(async () => {
+      await hook.result.current.setRepeatMode('one');
+    });
+    TP.setRepeatMode.mockClear();
+    await act(async () => {
+      await hook.result.current.setPlaylist([item('c'), item('d')], 0);
+    });
+    expect(TP.setRepeatMode).toHaveBeenCalledWith(1);
+    expect(hook.result.current.playlistState?.repeatMode).toBe('one');
   });
 });

@@ -12,6 +12,7 @@ import { getEffectiveCuts, nextKeepStart, cutPlaybackAction } from '../lib/trim'
 import { planQueueSync } from '../lib/queueNav';
 import { skipWrapped, runQueueOp } from '../services/queueControl';
 import { onVersionUpdated } from '../lib/playbackStore';
+import { getSettings, updateSettings } from '../lib/settings';
 
 /** 버전의 첫 재생 시작 지점(첫 남길 구간의 시작). cuts/레거시 trim 모두 대응. */
 const playStartOf = (version: Version): number => {
@@ -372,21 +373,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       try {
         // 새 큐의 이벤트가 이전 목록으로 해석되지 않도록 상태를 먼저 교체한다
         const startItem = items[startIndex] ?? items[0];
-        setPlaylistState({ items, currentIndex: startIndex, repeatMode: 'all', sourceId });
+        // 한 곡만 재생할 때는 무한 반복하지 않는다. 여러 곡이면 마지막으로 고른 반복 모드를 쓴다.
+        const repeatMode = items.length === 1 ? 'none' : getSettings().repeatMode;
+        setPlaylistState({ items, currentIndex: startIndex, repeatMode, sourceId });
         pendingIdRef.current = startItem.version.id;
         activeIdRef.current = startItem.version.id;
         cutStateRef.current = { id: startItem.version.id, armed: false, ended: false };
         setCurrentTrackState(startItem);
 
         await TrackPlayer.reset();
-        // 반복 모드는 reset 으로 초기화되지 않아 이전 큐의 '한 곡 반복'이 남는다. 화면 표시('all')와 맞춘다.
-        await TrackPlayer.setRepeatMode(RepeatMode.Queue);
+        // 반복 모드는 reset 으로 초기화되지 않아 이전 큐의 '한 곡 반복'이 남는다. 화면 표시와 맞춘다.
+        await TrackPlayer.setRepeatMode(toNativeRepeat(repeatMode));
         await TrackPlayer.add(items.map(toTrack));
         // 곡 이동과 시작 위치 이동을 한 번에(따로 seek 하면 다른 곡에 적용될 수 있다)
         await TrackPlayer.skip(startIndex, playStartOf(startItem.version));
         await TrackPlayer.play();
 
-        setIsExpanded(true);
+        // 곡을 누를 때마다 전체화면이 덮지 않게, 설정에서 켠 경우에만 펼친다(기본은 미니 플레이어만)
+        if (getSettings().autoOpenPlayer) setIsExpanded(true);
       } catch (error) {
         console.error('플레이리스트 설정 실패:', error);
       } finally {
@@ -459,6 +463,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     const state = playlistRef.current;
     if (state) setPlaylistState({ ...state, repeatMode: mode });
+    // 여러 곡을 재생할 때 고른 반복 모드는 다음 재생에도 이어지도록 기억한다
+    if (state && state.items.length > 1) updateSettings({ repeatMode: mode });
   }, [setPlaylistState]);
 
   const handleTrackEnd = useCallback(() => {
