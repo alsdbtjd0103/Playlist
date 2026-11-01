@@ -6,6 +6,7 @@ import {
   DefaultTheme as NavLightTheme,
   DarkTheme as NavDarkTheme,
   useNavigationContainerRef,
+  StackActions,
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -18,7 +19,12 @@ import { PlaybackService } from './services/PlaybackService';
 import { RootStackParamList } from './types';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useAppFonts } from './lib/fonts';
-import { ColorTokens, fontFamily } from './lib/theme';
+import { ColorTokens, fontFamily, spacing } from './lib/theme';
+import { SettingsProvider } from './contexts/SettingsContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { tabPressAction, ROOT_SCREEN_BY_TAB } from './lib/tabNav';
+import { haptic } from './lib/haptics';
+import PressableScale from './components/PressableScale';
 
 // TrackPlayer 백그라운드 서비스 등록
 TrackPlayer.registerPlaybackService(() => PlaybackService);
@@ -52,13 +58,22 @@ function HomeStackScreen({ bg }: { bg: string }) {
         animation: 'fade',
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
-        gestureEnabled: false,
+        // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
+        gestureEnabled: true,
       }}
     >
       <HomeStack.Screen name="Home" component={HomeScreen} />
       <HomeStack.Screen name="SongDetail" component={SongDetailScreen} />
-      <HomeStack.Screen name="TrimEditor" component={TrimEditorScreen} options={{ presentation: 'fullScreenModal' }} />
-      <HomeStack.Screen name="Denoise" component={DenoiseScreen} options={{ presentation: 'fullScreenModal' }} />
+      <HomeStack.Screen
+        name="TrimEditor"
+        component={TrimEditorScreen}
+        options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
+      />
+      <HomeStack.Screen
+        name="Denoise"
+        component={DenoiseScreen}
+        options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -71,7 +86,8 @@ function PlaylistStackScreen({ bg }: { bg: string }) {
         animation: 'fade',
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
-        gestureEnabled: false,
+        // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
+        gestureEnabled: true,
       }}
     >
       <PlaylistStack.Screen name="Playlists" component={PlaylistsScreen} />
@@ -88,7 +104,8 @@ function MemoStackScreen({ bg }: { bg: string }) {
         animation: 'fade',
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
-        gestureEnabled: false,
+        // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
+        gestureEnabled: true,
       }}
     >
       <MemoStack.Screen name="MemoFeed" component={MemoFeedScreen} />
@@ -104,7 +121,8 @@ function SettingsStackScreen({ bg }: { bg: string }) {
         animation: 'fade',
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
-        gestureEnabled: false,
+        // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
+        gestureEnabled: true,
       }}
     >
       <SettingsStack.Screen name="Settings" component={SettingsScreen} />
@@ -113,6 +131,14 @@ function SettingsStackScreen({ bg }: { bg: string }) {
   );
 }
 
+const TAB_ICONS: Record<string, { on: keyof typeof Ionicons.glyphMap; off: keyof typeof Ionicons.glyphMap }> = {
+  HomeTab: { on: 'musical-notes', off: 'musical-notes-outline' },
+  PlaylistTab: { on: 'albums', off: 'albums-outline' },
+  MemoTab: { on: 'document-text', off: 'document-text-outline' },
+  SettingsTab: { on: 'settings', off: 'settings-outline' },
+};
+
+// 화면 가장자리에서 띄운 둥근 탭바. 선택된 탭은 아이콘 뒤에 알약 모양 표시를 둔다.
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, scheme } = useTheme();
@@ -120,9 +146,9 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const activeColor = scheme === 'dark' ? colors.accent : colors.accentStrong;
 
   return (
-    <View>
+    <View style={styles.wrap}>
       <MiniPlayer />
-      <View style={[styles.container, { paddingBottom: insets.bottom > 0 ? insets.bottom : 8 }]}>
+      <View style={[styles.bar, { marginBottom: Math.max(insets.bottom, spacing.sm) }]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label =
@@ -140,25 +166,37 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               target: route.key,
               canPreventDefault: true,
             });
-            if (!isFocused && !event.defaultPrevented) {
+            if (event.defaultPrevented) return;
+            haptic('selection');
+            const nested = route.state as { index?: number; key?: string } | undefined;
+            const action = tabPressAction({ isFocused, nestedIndex: nested?.index });
+            if (action === 'navigate') {
               navigation.navigate(route.name);
+            } else if (action === 'navigateToRoot') {
+              navigation.navigate(route.name, { screen: ROOT_SCREEN_BY_TAB[route.name] });
+            } else if (action === 'popToRoot' && nested?.key) {
+              navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
             }
           };
 
-          const iconByRoute: Record<string, any> = {
-            HomeTab: 'musical-notes',
-            PlaylistTab: 'albums',
-            MemoTab: 'document-text-outline',
-            SettingsTab: 'settings-outline',
-          };
-          const iconName = iconByRoute[route.name] ?? 'ellipse';
+          const icons = TAB_ICONS[route.name];
           const tint = isFocused ? activeColor : colors.textMuted;
 
           return (
-            <TouchableOpacity key={route.key} onPress={onPress} style={styles.tab}>
-              <Ionicons name={iconName as any} size={24} color={tint} />
-              <Text style={[styles.label, { color: tint }]}>{label as string}</Text>
-            </TouchableOpacity>
+            <PressableScale
+              key={route.key}
+              onPress={onPress}
+              style={styles.tab}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={label as string}
+              testID={`tab-${route.name}`}
+            >
+              <View style={[styles.indicator, isFocused && { backgroundColor: colors.surfaceAlt }]}>
+                <Ionicons name={(isFocused ? icons?.on : icons?.off) ?? 'ellipse'} size={22} color={tint} />
+              </View>
+              <Text style={[styles.label, { color: tint }, isFocused && styles.labelActive]}>{label as string}</Text>
+            </PressableScale>
           );
         })}
       </View>
@@ -168,22 +206,45 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
 const makeTabStyles = (c: ColorTokens) =>
   StyleSheet.create({
-    container: {
+    wrap: {
+      backgroundColor: c.bg,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      gap: spacing.sm,
+    },
+    bar: {
       flexDirection: 'row',
       backgroundColor: c.surface,
-      borderTopColor: c.border,
-      borderTopWidth: 1,
-      paddingTop: 8,
+      borderRadius: 28,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: c.border,
+      paddingVertical: 6,
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
     },
     tab: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 4,
+      gap: 2,
+      minHeight: 52,
+    },
+    indicator: {
+      width: 56,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     label: {
-      fontFamily: fontFamily.semibold,
+      fontFamily: fontFamily.medium,
       fontSize: 11,
+    },
+    labelActive: {
+      fontFamily: fontFamily.bold,
     },
   });
 
@@ -202,6 +263,12 @@ function AppInner() {
 
     if (tabState && tabState.index && tabState.index > 0) {
       return false;
+    }
+
+    // 노래 탭이 아닌 탭의 첫 화면에서는 종료를 묻지 않고 노래 탭으로 돌아간다
+    if (currentTabRoute && currentTabRoute.name !== 'HomeTab') {
+      navigationRef.current?.navigate('HomeTab' as never);
+      return true;
     }
 
     if (backPressedOnce.current) {
@@ -254,6 +321,8 @@ function AppInner() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }} onLayout={onLayout}>
       <SafeAreaProvider>
+        <SettingsProvider>
+        <ToastProvider bottomOffset={150}>
         <PlayerProvider>
           <NavigationContainer ref={navigationRef} theme={navTheme}>
             <View style={{ flex: 1 }}>
@@ -280,6 +349,8 @@ function AppInner() {
           </NavigationContainer>
           <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         </PlayerProvider>
+        </ToastProvider>
+        </SettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
