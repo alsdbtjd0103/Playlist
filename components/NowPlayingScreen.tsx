@@ -17,7 +17,7 @@ import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../l
 import { formatVersionNumber } from '../lib/versionLabel';
 import { AlbumArt } from './AlbumArt';
 import PressableScale from './PressableScale';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, StackActions } from '@react-navigation/native';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
@@ -53,7 +53,17 @@ export default function NowPlayingScreen() {
   const goToSong = () => {
     if (!currentTrack) return;
     minimizePlayer();
-    navigation.navigate('HomeTab', { screen: 'SongDetail', params: { songId: currentTrack.song.id } });
+    const songId = currentTrack.song.id;
+    // 노래 탭 스택 위에 곡 상세를 쌓는다. navigate(탭, { screen }) 은 열려 있던 상세 화면을
+    // 다른 곡으로 바꿔 버리고(뒤로가기로 못 돌아감), 편집기의 확인 없이 화면을 지운다.
+    navigation.navigate('HomeTab');
+    const homeStack = navigation.getState?.()?.routes?.find((r: any) => r.name === 'HomeTab')?.state;
+    const top = homeStack?.routes?.[homeStack.index ?? 0];
+    if (!homeStack?.key) {
+      navigation.navigate('HomeTab', { screen: 'SongDetail', params: { songId } });
+    } else if (!(top?.name === 'SongDetail' && top?.params?.songId === songId)) {
+      navigation.dispatch({ ...StackActions.push('SongDetail', { songId }), target: homeStack.key });
+    }
   };
 
   // 애니메이션 효과

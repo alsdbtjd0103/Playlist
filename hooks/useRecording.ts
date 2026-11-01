@@ -63,6 +63,13 @@ const RECORDING_AUDIO_MODE = {
   allowsBackgroundRecording: true,
 } as const;
 
+// 저용량: AAC 모노 64kbps(약 0.5MB/분). 확장자·코덱은 고음질과 같아 편집·공유가 그대로 동작한다.
+const LOW_SIZE_PRESET = {
+  ...RecordingPresets.HIGH_QUALITY,
+  numberOfChannels: 1,
+  bitRate: 64000,
+};
+
 let audioModeReady: Promise<void> | null = null;
 function ensureRecordingAudioMode(): Promise<void> {
   if (!audioModeReady) {
@@ -162,8 +169,10 @@ export function useRecording(): UseRecordingReturn {
   );
 
   // 녹음 품질은 훅이 처음 마운트될 때 한 번만 읽는다(녹음 중 설정이 바뀌어 녹음기가 다시 만들어지지 않게).
+  // 저용량도 AAC(m4a)로 녹음한다. 라이브러리의 LOW_QUALITY 는 Android 에서 8kHz AMR(3gp)이라
+  // 노래 녹음에 부적합하고, 편집(잘라내기)·공유가 m4a 를 전제로 해서 깨진다.
   const [recordingOptions] = useState(() => ({
-    ...(getSettings().recordingQuality === 'low' ? RecordingPresets.LOW_QUALITY : RecordingPresets.HIGH_QUALITY),
+    ...(getSettings().recordingQuality === 'low' ? LOW_SIZE_PRESET : RecordingPresets.HIGH_QUALITY),
     isMeteringEnabled: true,
   }));
   const audioRecorder = useAudioRecorder(recordingOptions, onRecorderStatus);

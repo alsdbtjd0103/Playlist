@@ -23,7 +23,7 @@ import { AlbumArt } from '../components/AlbumArt';
 import KeyBadge from '../components/KeyBadge';
 import KeyPickerModal from '../components/KeyPickerModal';
 import ScreenHeader from '../components/ScreenHeader';
-import BottomSheet, { SheetAction } from '../components/BottomSheet';
+import BottomSheet, { SheetAction, afterSheetClose } from '../components/BottomSheet';
 import PressableScale from '../components/PressableScale';
 import ErrorState from '../components/ErrorState';
 import { SkeletonList } from '../components/Skeleton';
@@ -415,7 +415,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
     setSongSheetVisible(false);
     setInfoTitle(song.title);
     setInfoArtist(song.artist ?? '');
-    setInfoSheetVisible(true);
+    afterSheetClose(() => setInfoSheetVisible(true));
   };
 
   const handleSaveInfo = async () => {
@@ -438,7 +438,7 @@ export default function SongDetailScreen({ route, navigation }: Props) {
   const confirmDeleteSong = () => {
     setSongSheetVisible(false);
     const count = song?.versions.length ?? 0;
-    Alert.alert('곡 삭제', `곡과 녹음 ${count}개를 모두 삭제할까요?`, [
+    afterSheetClose(() => Alert.alert('곡 삭제', `곡과 녹음 ${count}개를 모두 삭제할까요?`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',
@@ -454,13 +454,13 @@ export default function SongDetailScreen({ route, navigation }: Props) {
           }
         },
       },
-    ]);
+    ]));
   };
 
   const closeMenuThen = (fn: (v: Version) => void) => () => {
     const v = menuVersion;
     setMenuVersion(null);
-    if (v) fn(v);
+    if (v) afterSheetClose(() => fn(v));
   };
 
   if (!song) {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -17,7 +17,7 @@ import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../l
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import ScreenHeader from '../components/ScreenHeader';
-import BottomSheet, { SheetAction } from '../components/BottomSheet';
+import BottomSheet, { SheetAction, afterSheetClose } from '../components/BottomSheet';
 import PressableScale from '../components/PressableScale';
 import Chip from '../components/Chip';
 import ErrorState from '../components/ErrorState';
@@ -48,6 +48,9 @@ export default function PlaylistsScreen({ navigation }: Props) {
   const [renameText, setRenameText] = useState('');
   const [renaming, setRenaming] = useState(false);
 
+  // 실행 취소를 기다리는 중인 플레이리스트는 다시 불러와도 보이지 않게 거른다
+  const pendingDeletesRef = useRef(new Set<string>());
+
   const fetchPlaylists = useCallback(async () => {
     try {
       const [data, items, versions] = await Promise.all([
@@ -63,7 +66,7 @@ export default function PlaylistsScreen({ navigation }: Props) {
         next.set(item.playlistId, (next.get(item.playlistId) ?? 0) + 1);
       }
       setCounts(next);
-      setPlaylists(data);
+      setPlaylists(data.filter((p) => !pendingDeletesRef.current.has(p.id)));
       setLoadError(false);
     } catch (error) {
       console.error('플레이리스트 로드 실패:', error);
@@ -106,9 +109,10 @@ export default function PlaylistsScreen({ navigation }: Props) {
 
   const startRename = () => {
     if (!menuTarget) return;
-    setRenameText(menuTarget.name);
-    setRenameTarget(menuTarget);
+    const target = menuTarget;
+    setRenameText(target.name);
     setMenuTarget(null);
+    afterSheetClose(() => setRenameTarget(target));
   };
 
   const handleRename = async () => {
@@ -133,8 +137,10 @@ export default function PlaylistsScreen({ navigation }: Props) {
     if (!target) return;
     setMenuTarget(null);
     setPlaylists((prev) => (prev ? prev.filter((p) => p.id !== target.id) : prev));
+    pendingDeletesRef.current.add(target.id);
     showUndo(`「${target.name}」을 삭제했어요`, {
       onUndo: () => {
+        pendingDeletesRef.current.delete(target.id);
         fetchPlaylists();
       },
       onCommit: async () => {
@@ -142,7 +148,10 @@ export default function PlaylistsScreen({ navigation }: Props) {
           await deletePlaylist(target.id);
         } catch (error) {
           console.error('플레이리스트 삭제 실패:', error);
+          pendingDeletesRef.current.delete(target.id);
           await fetchPlaylists();
+        } finally {
+          pendingDeletesRef.current.delete(target.id);
         }
       },
     });

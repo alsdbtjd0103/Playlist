@@ -4,5 +4,7 @@ appId: com.playlist.app
 ---
 - launchApp:
     clearState: true
-# 로고 또는 빈 상태 안내 문구 중 하나가 보이면 홈 화면 진입 성공
-- assertVisible: "Playlist"
+# 워드마크와 하단 탭이 보이면 홈 화면 진입 성공
+- assertVisible: "plilog"
+- assertVisible:
+    id: "tab-HomeTab"

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Song, Version, Playlist, PlaylistItem } from '@/types';
 import { getVersionNumberMap } from './versionLabel';
 import { deleteAudioLocally, deleteAllAudioForSong } from './storage';
+import { notifyVersionsRemoved } from './playbackStore';
 
 // AsyncStorage 키 상수
 const KEYS = {
@@ -63,6 +64,9 @@ const sortSongs = (songs: Song[]) =>
 
 const loadSongs = async () => sortSongs((await readArray(KEYS.SONGS)).map(toSong));
 const loadVersions = async () => (await readArray(KEYS.VERSIONS)).map(toVersion);
+
+/** 읽기 실패 시 예외를 던지는 버전 목록(파일 삭제처럼 실패하면 안 되는 판단에 쓴다). */
+export const getAllVersionsStrict = (): Promise<Version[]> => loadVersions();
 const loadPlaylists = async () => (await readArray(KEYS.PLAYLISTS)).map(toPlaylist);
 const loadPlaylistItems = async () => (await readArray(KEYS.PLAYLIST_ITEMS)).map(toPlaylistItem);
 
@@ -329,6 +333,7 @@ const _deleteVersions = async (versionIds: string[]): Promise<void> => {
   ];
   if (defaultCleared) pairs.push([KEYS.SONGS, JSON.stringify(songs)]);
   await AsyncStorage.multiSet(pairs);
+  notifyVersionsRemoved(removed.map((v) => v.id));
 
   const stillUsed = new Set(remaining.map((v) => v.storageUrl));
   const orphanFiles = new Set(removed.map((v) => v.storageUrl).filter((uri) => uri && !stillUsed.has(uri)));

@@ -66,11 +66,12 @@ describe('PlaylistsScreen', () => {
   });
 
   it('⋮ → 이름 변경 시트에서 renamePlaylist를 호출한다', async () => {
-    const { findByText, getByTestId } = renderScreen();
+    const { findByText, findByTestId, getByTestId } = renderScreen();
     await findByText('드라이브');
     fireEvent.press(getByTestId('playlist-menu-p2'));
     fireEvent.press(getByTestId('playlist-menu-rename'));
-    fireEvent.changeText(getByTestId('rename-playlist-input'), '출근길');
+    // iOS 에서는 메뉴 시트가 닫힌 뒤 이름 변경 시트가 열린다(afterSheetClose)
+    fireEvent.changeText(await findByTestId('rename-playlist-input'), '출근길');
     fireEvent.press(getByTestId('rename-playlist-confirm'));
     await waitFor(() => expect(renamePlaylist).toHaveBeenCalledWith('p2', '출근길'));
   });

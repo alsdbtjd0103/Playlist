@@ -94,15 +94,20 @@ describe('SongDetailScreen', () => {
   });
 
   it('바텀시트에서 삭제하면 카드가 바로 사라지고 삭제가 확정된다', async () => {
+    // 실제 저장소처럼 삭제가 확정되면 이후 조회에서도 빠진다
+    (deleteVersion as jest.Mock).mockImplementationOnce(async () => {
+      (getVersionsBySong as jest.Mock).mockResolvedValue([v2]);
+    });
     const { findByTestId, getByTestId, queryByTestId } = renderScreen();
     fireEvent.press(await findByTestId('version-more-v1'));
     await act(async () => {
       fireEvent.press(getByTestId('version-menu-delete'));
     });
-    expect(queryByTestId('version-card-v1')).toBeNull();
-    expect(getByTestId('version-card-v2')).toBeTruthy();
+    // iOS 에서는 시트가 닫힌 뒤 실행되므로 기다린다(afterSheetClose)
     // ToastProvider 가 없으면 실행 취소 없이 바로 확정한다
     await waitFor(() => expect(deleteVersion).toHaveBeenCalledWith('v1'));
+    await waitFor(() => expect(queryByTestId('version-card-v1')).toBeNull());
+    expect(getByTestId('version-card-v2')).toBeTruthy();
   });
 
   it('재생 중인 버전에 "재생 중" 표시를 단다', async () => {

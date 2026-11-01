@@ -41,6 +41,15 @@ export default function BottomSheet({ visible, onClose, title, subtitle, childre
   );
 }
 
+/**
+ * 시트를 닫은 직후 다른 시트·Alert·공유 창을 열 때 쓴다. iOS 는 닫히는 중인 Modal 이 있으면
+ * 새 화면을 띄우지 못해 두 번째 창이 나타나지 않으므로, 닫힘 애니메이션이 끝난 뒤 실행한다.
+ */
+export function afterSheetClose(fn: () => void): void {
+  if (Platform.OS === 'ios') setTimeout(fn, 350);
+  else fn();
+}
+
 interface SheetActionProps {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;

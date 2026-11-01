@@ -15,3 +15,19 @@ export const onVersionUpdated = (listener: Listener): (() => void) => {
 export const notifyVersionUpdated = (version: Version): void => {
   listeners.forEach((listener) => listener(version));
 };
+
+// 버전이 삭제되면 재생 큐에서도 빼야 한다(지워진 파일을 재생하다 멈추지 않게).
+type RemovedListener = (versionIds: string[]) => void;
+const removedListeners = new Set<RemovedListener>();
+
+export const onVersionsRemoved = (listener: RemovedListener): (() => void) => {
+  removedListeners.add(listener);
+  return () => {
+    removedListeners.delete(listener);
+  };
+};
+
+export const notifyVersionsRemoved = (versionIds: string[]): void => {
+  if (versionIds.length === 0) return;
+  removedListeners.forEach((listener) => listener(versionIds));
+};

@@ -1,5 +1,5 @@
 jest.mock('expo-file-system', () => ({ Paths: {}, Directory: class {}, File: class {} }));
-jest.mock('../lib/database', () => ({ getAllVersions: jest.fn(async () => []) }));
+jest.mock('../lib/database', () => ({ getAllVersionsStrict: jest.fn(async () => []), getAllSongs: jest.fn(async () => []) }));
 
 import { findOrphans, normalizeUri, formatBytes } from '../lib/storageCleanup';
 
@@ -18,9 +18,20 @@ describe('저장 공간 정리 판정', () => {
     expect(findOrphans([{ uri: 'file:///x.m4a', size: 1 }], ['']).length).toBe(1);
   });
 
-  it('경로 정규화', () => {
+  it('경로 정규화(앱 컨테이너 경로가 달라도 recordings/ 아래가 같으면 같은 파일)', () => {
     expect(normalizeUri('file:///a/b/')).toBe('/a/b');
     expect(normalizeUri('file:/a/b')).toBe('/a/b');
+    expect(normalizeUri('file:///old-uuid/Documents/recordings/s1/a.m4a')).toBe(
+      normalizeUri('file:///new-uuid/Documents/recordings/s1/a.m4a')
+    );
+  });
+
+  it('아직 있는 곡의 폴더에 있는 파일은 참조가 없어도 지우지 않는다', () => {
+    const files = [
+      { uri: 'file:///d/recordings/live/x.m4a', size: 1 },
+      { uri: 'file:///d/recordings/gone/y.m4a', size: 1 },
+    ];
+    expect(findOrphans(files, [], ['live']).map((f) => f.uri)).toEqual(['file:///d/recordings/gone/y.m4a']);
   });
 
   it('용량 표기', () => {

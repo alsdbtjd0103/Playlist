@@ -11,7 +11,7 @@ import { Song, Version } from '../types';
 import { getEffectiveCuts, nextKeepStart, cutPlaybackAction } from '../lib/trim';
 import { planQueueSync } from '../lib/queueNav';
 import { skipWrapped, runQueueOp } from '../services/queueControl';
-import { onVersionUpdated } from '../lib/playbackStore';
+import { onVersionUpdated, onVersionsRemoved } from '../lib/playbackStore';
 import { getSettings, updateSettings } from '../lib/settings';
 
 /** 버전의 첫 재생 시작 지점(첫 남길 구간의 시작). cuts/레거시 trim 모두 대응. */
@@ -229,6 +229,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.remove();
   }, []);
+
+  // 삭제된 버전을 큐에서 뺀다. 지금 재생 중인 곡이면 플레이어를 닫는다(파일이 지워져 멈추므로).
+  useEffect(
+    () =>
+      onVersionsRemoved((versionIds) => {
+        const removed = new Set(versionIds);
+        const state = playlistRef.current;
+        if (!state || !state.items.some((it) => removed.has(it.version.id))) return;
+        runQueueOp(async () => {
+          try {
+            const current = playlistRef.current;
+            if (!current) return;
+            if (activeIdRef.current && removed.has(activeIdRef.current)) {
+              await TrackPlayer.reset();
+              activeIdRef.current = null;
+              setCurrentTrackState(null);
+              setIsExpanded(false);
+              setPlaylistState(null);
+              return;
+            }
+            const queue = await TrackPlayer.getQueue();
+            const indexes = queue.map((t, i) => (removed.has(t.id as string) ? i : -1)).filter((i) => i >= 0);
+            if (indexes.length > 0) await TrackPlayer.remove(indexes);
+            const items = current.items.filter((it) => !removed.has(it.version.id));
+            const currentIndex = Math.max(0, items.findIndex((it) => it.version.id === activeIdRef.current));
+            setPlaylistState({ ...current, items, currentIndex });
+          } catch (error) {
+            console.error('삭제된 곡을 큐에서 빼지 못함:', error);
+          }
+        });
+      }),
+    [setPlaylistState]
+  );
 
   // 편집기에서 cuts 를 저장하면 재생 중인 큐의 버전 정보도 바꿔, 바뀐 구간을 바로 건너뛰게 한다
   useEffect(

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,7 +38,7 @@ import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../l
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import ScreenHeader, { HeaderAction } from '../components/ScreenHeader';
-import BottomSheet, { SheetAction } from '../components/BottomSheet';
+import BottomSheet, { SheetAction, afterSheetClose } from '../components/BottomSheet';
 import PressableScale from '../components/PressableScale';
 import Chip from '../components/Chip';
 import ErrorState from '../components/ErrorState';
@@ -90,9 +90,15 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
   const [renameText, setRenameText] = useState('');
   const [renaming, setRenaming] = useState(false);
 
+  // 실행 취소를 기다리는 중인(아직 저장소에서 빠지지 않은) 항목. 다시 불러와도 보이지 않게 거른다.
+  const pendingRemovalsRef = useRef(new Map<string, string>()); // itemId → versionId
+
   const fetchPlaylist = useCallback(async () => {
     try {
-      const data = await getPlaylistWithDetails(playlistId);
+      const raw = await getPlaylistWithDetails(playlistId);
+      const data = raw
+        ? { ...raw, items: raw.items.filter((i) => !pendingRemovalsRef.current.has(i.id)) }
+        : raw;
       if (!data) {
         // 삭제된 플레이리스트: 로딩 표시가 끝나지 않으므로 이전 화면으로 돌아간다
         Alert.alert('알림', '플레이리스트를 찾을 수 없어요.');
@@ -138,7 +144,11 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
   const handleDragEnd = async ({ data }: { data: PlaylistItem[] }) => {
     setPlaylistData((prev) => (prev ? { ...prev, items: data } : prev));
     try {
-      await reorderPlaylistItems(playlistId, data.map((item) => item.id));
+      // 빼기를 기다리는 항목도 목록에 남겨 둔다(안 그러면 순서 저장이 그 항목을 지워 실행 취소가 안 된다)
+      await reorderPlaylistItems(playlistId, [
+        ...data.map((item) => item.id),
+        ...pendingRemovalsRef.current.keys(),
+      ]);
     } catch (error) {
       console.error('순서 저장 실패:', error);
       await fetchPlaylist();
@@ -240,8 +250,10 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
     setPlaylistData((prev) =>
       prev ? { ...prev, items: prev.items.filter((i) => i.id !== item.id) } : prev
     );
+    pendingRemovalsRef.current.set(item.id, item.versionId);
     showUndo('목록에서 뺐어요', {
       onUndo: () => {
+        pendingRemovalsRef.current.delete(item.id);
         fetchPlaylist();
       },
       onCommit: async () => {
@@ -250,6 +262,8 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
         } catch (error) {
           console.error('항목 제거 실패:', error);
           await fetchPlaylist();
+        } finally {
+          pendingRemovalsRef.current.delete(item.id);
         }
       },
     });
@@ -264,7 +278,7 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
   const startRename = () => {
     setPlaylistMenuVisible(false);
     setRenameText(playlist?.name ?? '');
-    setRenameVisible(true);
+    afterSheetClose(() => setRenameVisible(true));
   };
 
   const handleRename = async () => {
@@ -286,7 +300,7 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
 
   const confirmDeletePlaylist = () => {
     setPlaylistMenuVisible(false);
-    Alert.alert('플레이리스트 삭제', `「${playlist?.name ?? ''}」을 삭제할까요?\n녹음 파일은 지워지지 않아요.`, [
+    afterSheetClose(() => Alert.alert('플레이리스트 삭제', `「${playlist?.name ?? ''}」을 삭제할까요?\n녹음 파일은 지워지지 않아요.`, [
       { text: '취소', style: 'cancel' },
       {
         text: '삭제',
@@ -302,7 +316,7 @@ export default function PlaylistDetailScreen({ route, navigation }: Props) {
           }
         },
       },
-    ]);
+    ]));
   };
 
   // 직접 순서일 때만 드래그(핸들) 활성화. 정렬 중에는 수동 순서가 의미 없으므로 비활성.

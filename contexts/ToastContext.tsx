@@ -65,14 +65,17 @@ export function ToastProvider({ children, bottomOffset = 0 }: { children: React.
 
   const show = useCallback(
     (message: string) => {
-      flushPending();
+      // 실행 취소를 기다리는 중이면 그 스낵바를 유지한다. 일반 알림이 대기 중인 삭제를
+      // 앞당겨 확정해 버리면(예: 메모 저장 직후) 실행 취소할 기회가 사라진다.
+      if (entryRef.current?.undo) return;
+      clearTimer();
       const id = ++idRef.current;
       set({ id, message });
       timerRef.current = setTimeout(() => {
         if (entryRef.current?.id === id) set(null);
       }, TOAST_MS);
     },
-    [flushPending]
+    []
   );
 
   const showUndo = useCallback(

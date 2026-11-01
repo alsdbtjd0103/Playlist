@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
-import { View, BackHandler, ToastAndroid, Platform, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, BackHandler, ToastAndroid, Platform, Pressable, Text, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   NavigationContainer,
@@ -24,7 +24,6 @@ import { SettingsProvider } from './contexts/SettingsContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { tabPressAction, ROOT_SCREEN_BY_TAB } from './lib/tabNav';
 import { haptic } from './lib/haptics';
-import PressableScale from './components/PressableScale';
 
 // TrackPlayer 백그라운드 서비스 등록
 TrackPlayer.registerPlaybackService(() => PlaybackService);
@@ -55,7 +54,7 @@ function HomeStackScreen({ bg }: { bg: string }) {
     <HomeStack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: 'fade',
+        animation: Platform.OS === 'ios' ? 'default' : 'fade', // iOS 는 기본 애니메이션이어야 스와이프 뒤로가기가 자연스럽다
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
         // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
@@ -83,7 +82,7 @@ function PlaylistStackScreen({ bg }: { bg: string }) {
     <PlaylistStack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: 'fade',
+        animation: Platform.OS === 'ios' ? 'default' : 'fade', // iOS 는 기본 애니메이션이어야 스와이프 뒤로가기가 자연스럽다
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
         // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
@@ -101,7 +100,7 @@ function MemoStackScreen({ bg }: { bg: string }) {
     <MemoStack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: 'fade',
+        animation: Platform.OS === 'ios' ? 'default' : 'fade', // iOS 는 기본 애니메이션이어야 스와이프 뒤로가기가 자연스럽다
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
         // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
@@ -118,7 +117,7 @@ function SettingsStackScreen({ bg }: { bg: string }) {
     <SettingsStack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: 'fade',
+        animation: Platform.OS === 'ios' ? 'default' : 'fade', // iOS 는 기본 애니메이션이어야 스와이프 뒤로가기가 자연스럽다
         animationDuration: 150,
         contentStyle: { backgroundColor: bg },
         // 상세 화면은 스와이프로 뒤로 갈 수 있게 한다(편집기 같은 전체화면 모달은 화면별로 끈다)
@@ -172,8 +171,11 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             const action = tabPressAction({ isFocused, nestedIndex: nested?.index });
             if (action === 'navigate') {
               navigation.navigate(route.name);
-            } else if (action === 'navigateToRoot') {
-              navigation.navigate(route.name, { screen: ROOT_SCREEN_BY_TAB[route.name] });
+            } else if (action === 'navigateToRoot' && nested?.key) {
+              // 탭으로 옮긴 뒤 popToTop 으로 첫 화면까지 되돌린다. navigate(탭, { screen }) 은
+              // beforeRemove 를 거치지 않아 편집기의 "편집 내용 버리기" 확인 없이 화면을 지운다.
+              navigation.navigate(route.name);
+              navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
             } else if (action === 'popToRoot' && nested?.key) {
               navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
             }
@@ -183,7 +185,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           const tint = isFocused ? activeColor : colors.textMuted;
 
           return (
-            <PressableScale
+            <Pressable
               key={route.key}
               onPress={onPress}
               style={styles.tab}
@@ -192,11 +194,16 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               accessibilityLabel={label as string}
               testID={`tab-${route.name}`}
             >
-              <View style={[styles.indicator, isFocused && { backgroundColor: colors.surfaceAlt }]}>
+              {/* 선택 상태가 바뀔 때 다시 마운트한다: 이미 그려진 View 에 배경이 생기면
+                  Android(신 아키텍처)에서 모서리 둥글기가 적용되지 않는다 */}
+              <View
+                key={isFocused ? 'on' : 'off'}
+                style={[styles.indicator, isFocused && { backgroundColor: colors.surfaceAlt }]}
+              >
                 <Ionicons name={(isFocused ? icons?.on : icons?.off) ?? 'ellipse'} size={22} color={tint} />
               </View>
               <Text style={[styles.label, { color: tint }, isFocused && styles.labelActive]}>{label as string}</Text>
-            </PressableScale>
+            </Pressable>
           );
         })}
       </View>

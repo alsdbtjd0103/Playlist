@@ -27,6 +27,7 @@ jest.mock('react-native-track-player', () => {
     seekTo: fn(),
     setRepeatMode: fn(),
     getQueue: fn(async () => [{ id: 'a' }, { id: 'b' }]),
+    remove: fn(),
     getActiveTrackIndex: fn(async () => 1),
     getProgress: fn(async () => ({ position: mockPosition, duration: 60 })),
   };
@@ -44,6 +45,7 @@ jest.mock('react-native-track-player', () => {
 
 import TrackPlayer from 'react-native-track-player';
 import { updateSettings, DEFAULT_SETTINGS } from '../lib/settings';
+import { notifyVersionsRemoved } from '../lib/playbackStore';
 import { PlayerProvider, usePlayer, type PlayingTrack } from '../contexts/PlayerContext';
 
 const TP = TrackPlayer as unknown as Record<string, jest.Mock>;
@@ -172,5 +174,25 @@ describe('PlayerContext — 편집 구간·반복·종료 처리', () => {
     });
     expect(TP.setRepeatMode).toHaveBeenCalledWith(1);
     expect(hook.result.current.playlistState?.repeatMode).toBe('one');
+  });
+
+  it('재생 중인 버전이 삭제되면 플레이어를 닫는다', async () => {
+    const hook = await setup([item('a'), item('b')]);
+    await act(async () => {
+      notifyVersionsRemoved(['a']);
+    });
+    await waitFor(() => expect(hook.result.current.currentTrack).toBeNull());
+    expect(TP.reset).toHaveBeenCalled();
+  });
+
+  it('큐에 있는 다른 버전이 삭제되면 큐에서만 뺀다', async () => {
+    const hook = await setup([item('a'), item('b')]);
+    TP.reset.mockClear();
+    await act(async () => {
+      notifyVersionsRemoved(['b']);
+    });
+    await waitFor(() => expect(TP.remove).toHaveBeenCalledWith([1]));
+    expect(hook.result.current.playlistState?.items.map((i) => i.version.id)).toEqual(['a']);
+    expect(TP.reset).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import { Paths, Directory, File } from 'expo-file-system';
-import { getAllVersions } from './database';
+import { getAllVersionsStrict, getAllSongs } from './database';
 
 // 저장 공간 점검·정리. 어떤 버전도 참조하지 않는 녹음 파일(고아)과 캐시의 임시 파일을 찾는다.
 // DB 가 참조하는 파일은 절대 지우지 않는다.
@@ -17,7 +17,8 @@ export interface StorageReport {
   reclaimableBytes: number;
 }
 
-// "file:///a/b" 와 "file:/a/b", 인코딩 차이를 같은 경로로 본다
+// "file:///a/b" 와 "file:/a/b", 인코딩 차이를 같은 경로로 본다.
+// iOS 는 재설치 시 앱 컨테이너 경로가 바뀌므로 recordings/ 아래 상대 경로로 비교한다.
 export const normalizeUri = (uri: string): string => {
   let path = uri.replace(/^file:\/*/, '/');
   try {
@@ -25,12 +26,24 @@ export const normalizeUri = (uri: string): string => {
   } catch {
     // 잘못된 인코딩은 그대로 비교
   }
-  return path.replace(/\/+$/, '');
+  path = path.replace(/\/+$/, '');
+  const idx = path.lastIndexOf('/recordings/');
+  return idx >= 0 ? path.slice(idx) : path;
 };
 
-export function findOrphans(files: FileEntry[], referencedUris: string[]): FileEntry[] {
+/**
+ * 어떤 버전도 참조하지 않는 녹음 파일을 고른다. 안전장치:
+ * - 아직 있는 곡의 폴더(recordings/{songId}/)에 있는 파일은 지우지 않는다(참조 판정이 틀려도 녹음은 지킨다).
+ */
+export function findOrphans(files: FileEntry[], referencedUris: string[], liveSongIds: string[] = []): FileEntry[] {
   const referenced = new Set(referencedUris.filter(Boolean).map(normalizeUri));
-  return files.filter((f) => !referenced.has(normalizeUri(f.uri)));
+  const live = new Set(liveSongIds);
+  return files.filter((f) => {
+    const path = normalizeUri(f.uri);
+    if (referenced.has(path)) return false;
+    const songDir = path.match(/^\/recordings\/([^/]+)\//)?.[1];
+    return !(songDir && live.has(songDir));
+  });
 }
 
 const walk = (dir: Directory, out: FileEntry[]) => {
@@ -57,8 +70,13 @@ export async function scanStorage(): Promise<StorageReport> {
   const recordings: FileEntry[] = [];
   walk(new Directory(Paths.document, 'recordings'), recordings);
 
-  const versions = await getAllVersions();
-  const orphanFiles = findOrphans(recordings, versions.map((v) => v.storageUrl));
+  // 저장소 읽기에 실패하면(빈 목록으로 오인하면 모든 녹음이 고아가 된다) 예외로 멈춘다
+  const versions = await getAllVersionsStrict();
+  const songs = await getAllSongs();
+  if (versions.length === 0 && recordings.length > 0 && songs.length > 0) {
+    throw new Error('녹음 정보를 확인하지 못해 정리를 멈췄어요.');
+  }
+  const orphanFiles = findOrphans(recordings, versions.map((v) => v.storageUrl), songs.map((s) => s.id));
 
   const tempFiles: FileEntry[] = [];
   const cache = new Directory(Paths.cache);
@@ -82,7 +100,7 @@ export async function scanStorage(): Promise<StorageReport> {
 
 /** 점검 결과의 고아·임시 파일을 지운다. 지우기 직전에 참조 여부를 한 번 더 확인한다. 지운 바이트 수를 돌려준다. */
 export async function cleanStorage(report: StorageReport): Promise<number> {
-  const referenced = new Set((await getAllVersions()).map((v) => normalizeUri(v.storageUrl)));
+  const referenced = new Set((await getAllVersionsStrict()).map((v) => normalizeUri(v.storageUrl)));
   let freed = 0;
   for (const f of [...report.orphanFiles, ...report.tempFiles]) {
     if (referenced.has(normalizeUri(f.uri))) continue;

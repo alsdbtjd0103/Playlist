@@ -78,4 +78,17 @@ describe('토스트·실행 취소', () => {
     });
     expect(onCommit).not.toHaveBeenCalled();
   });
+
+  it('실행 취소 대기 중 일반 알림이 와도 삭제를 앞당겨 확정하지 않는다', async () => {
+    const r = renderToast();
+    const onCommit = jest.fn();
+    act(() => api.showUndo('곡을 삭제했어요', { onCommit }));
+    act(() => api.show('메모를 저장했어요'));
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(r.getByTestId('toast-undo')).toBeTruthy();
+    await act(async () => {
+      jest.advanceTimersByTime(UNDO_WINDOW_MS);
+    });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
 });

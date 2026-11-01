@@ -16,10 +16,13 @@ const SettingsContext = createContext<SettingsContextValue | undefined>(undefine
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(getSettings());
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeSettings(setSettings);
-    loadSettings();
+    // 저장된 설정을 읽기 전에 화면이 뜨면, 기본값으로 동작하거나(예: 통계 끄기 무시)
+    // 기본값+변경분으로 저장된 설정을 덮어쓸 수 있다. 읽기를 마친 뒤에 화면을 그린다.
+    loadSettings().finally(() => setReady(true));
     return unsubscribe;
   }, []);
 
@@ -28,7 +31,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(() => ({ settings, update }), [settings, update]);
-  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+  return <SettingsContext.Provider value={value}>{ready ? children : null}</SettingsContext.Provider>;
 }
 
 // Provider 밖(테스트 등)에서도 동작하도록 모듈 캐시로 대체한다.
