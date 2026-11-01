@@ -127,3 +127,23 @@ describe('데이터 무결성', () => {
     expect(rows[0].versions.map((v) => v.id)).toEqual([newer, older]);
   });
 });
+
+describe('정보 수정', () => {
+  it('곡 제목·아티스트를 바꾸고, 빈 제목은 거부한다', async () => {
+    const { updateSongInfo } = require('@/lib/database');
+    const songId = await addSong('옛 제목', '가수');
+    await updateSongInfo(songId, { title: '  새 제목 ', artist: '' });
+    const song = await getSong(songId);
+    expect(song?.title).toBe('새 제목');
+    expect(song?.artist).toBeUndefined();
+    await expect(updateSongInfo(songId, { title: '   ' })).rejects.toThrow();
+  });
+
+  it('플레이리스트 이름을 바꾸고, 빈 이름은 거부한다', async () => {
+    const { renamePlaylist } = require('@/lib/database');
+    const id = await createPlaylist('A');
+    await renamePlaylist(id, ' 출근길 ');
+    expect((await getPlaylists()).find((p) => p.id === id)?.name).toBe('출근길');
+    await expect(renamePlaylist(id, '')).rejects.toThrow();
+  });
+});

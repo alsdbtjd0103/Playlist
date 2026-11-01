@@ -135,6 +135,23 @@ export const updateSongDefaultVersion = (
     }
   });
 
+/** 곡 제목·아티스트 수정. 제목은 비울 수 없다. */
+export const updateSongInfo = (
+  songId: string,
+  info: { title: string; artist?: string }
+): Promise<void> =>
+  serialized(async () => {
+    const title = info.title.trim();
+    if (!title) throw new Error('곡 제목을 입력해 주세요.');
+    const songs = await loadSongs();
+    const song = songs.find((s) => s.id === songId);
+    if (!song) throw new Error('곡을 찾을 수 없습니다.');
+    song.title = title;
+    song.artist = info.artist?.trim() || undefined;
+    song.updatedAt = new Date();
+    await AsyncStorage.setItem(KEYS.SONGS, JSON.stringify(songs));
+  });
+
 export const deleteSong = async (songId: string): Promise<void> => {
   await serialized(async () => {
     // 관련 버전·플레이리스트 항목을 한 번에 지운 뒤 곡 삭제
@@ -497,6 +514,19 @@ export const removeFromPlaylist = (playlistId: string, versionId: string): Promi
       (item) => !(item.playlistId === playlistId && item.versionId === versionId)
     );
     await AsyncStorage.setItem(KEYS.PLAYLIST_ITEMS, JSON.stringify(filteredItems));
+  });
+
+/** 플레이리스트 이름 변경. 이름은 비울 수 없다. */
+export const renamePlaylist = (playlistId: string, name: string): Promise<void> =>
+  serialized(async () => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('플레이리스트 이름을 입력해 주세요.');
+    const playlists = await loadPlaylists();
+    const playlist = playlists.find((p) => p.id === playlistId);
+    if (!playlist) throw new Error('플레이리스트를 찾을 수 없습니다.');
+    playlist.name = trimmed;
+    playlist.updatedAt = new Date();
+    await AsyncStorage.setItem(KEYS.PLAYLISTS, JSON.stringify(playlists));
   });
 
 export const deletePlaylist = (playlistId: string): Promise<void> =>
