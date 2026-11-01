@@ -15,6 +15,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { getSettings } from './settings';
 
 const POSTHOG_API_KEY = 'phc_kggLspoto9ijpFwEAXJJUwMSqcfPWaXBPwz3GNfzLvya';
 const POSTHOG_HOST = 'https://us.i.posthog.com'; // EU 프로젝트면 https://eu.i.posthog.com
@@ -23,7 +24,8 @@ const DISTINCT_ID_KEY = '@analytics_distinct_id';
 
 let distinctIdCache: string | null = null;
 
-const isEnabled = (): boolean => POSTHOG_API_KEY.length > 0;
+// 키가 있고, 사용자가 설정에서 '사용 통계 보내기'를 끄지 않았을 때만 보낸다
+const isEnabled = (): boolean => POSTHOG_API_KEY.length > 0 && getSettings().analytics !== false;
 
 // 디바이스마다 1개의 익명 식별자를 만들어 저장합니다(개인정보 아님).
 const getDistinctId = async (): Promise<string> => {
