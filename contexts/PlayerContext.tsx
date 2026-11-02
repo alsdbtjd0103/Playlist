@@ -10,7 +10,7 @@ import TrackPlayer, {
 import { Song, Version } from '../types';
 import { getEffectiveCuts, nextKeepStart, cutPlaybackAction } from '../lib/trim';
 import { planQueueSync } from '../lib/queueNav';
-import { skipWrapped, runQueueOp } from '../services/queueControl';
+import { skipWrapped, runQueueOp, skipPreviousOrRestart, setTrackStartResolver } from '../services/queueControl';
 import { onVersionUpdated, onVersionsRemoved } from '../lib/playbackStore';
 import { getSettings, updateSettings } from '../lib/settings';
 
@@ -180,6 +180,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.remove();
+  }, []);
+
+  // "이전" 판단(10초 이상 들었으면 처음부터)에 쓸 곡별 시작 지점을 원격 명령에도 알려 준다
+  useEffect(() => {
+    setTrackStartResolver((trackId) => {
+      const item = playlistRef.current?.items.find((it) => it.version.id === trackId);
+      return item ? playStartOf(item.version) : 0;
+    });
   }, []);
 
   // 재생할 수 없는 파일(지워졌거나 비어 있는 녹음)에서 큐 전체가 멈추지 않도록 다음 곡으로 넘긴다.
@@ -497,7 +505,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playPrevious = useCallback(async () => {
     await runExclusive(async () => {
       try {
-        await skipWrapped(-1);
+        await skipPreviousOrRestart();
       } catch (error) {
         console.error('이전 곡 재생 실패:', error);
       }

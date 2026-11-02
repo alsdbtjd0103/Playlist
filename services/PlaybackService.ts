@@ -1,5 +1,5 @@
 import TrackPlayer, { Event } from 'react-native-track-player';
-import { skipWrapped, runQueueOp } from './queueControl';
+import { skipWrapped, runQueueOp, skipPreviousOrRestart } from './queueControl';
 import { isRecordingActive } from '../lib/recordingState';
 
 /**
@@ -24,7 +24,7 @@ export async function PlaybackService() {
   });
 
   TrackPlayer.addEventListener(Event.RemotePrevious, () => {
-    runQueueOp(() => skipWrapped(-1)).catch((e) => console.error('원격 이전 곡 실패:', e));
+    runQueueOp(() => skipPreviousOrRestart()).catch((e) => console.error('원격 이전 곡 실패:', e));
   });
 
   TrackPlayer.addEventListener(Event.RemoteStop, () => {
