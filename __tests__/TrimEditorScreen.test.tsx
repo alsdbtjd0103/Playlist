@@ -136,7 +136,7 @@ it('편집 중 닫으면 확인 후 버리기를 눌러야 나간다', async () 
   await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
   await waitFor(() => r.getByTestId('cut-0-region'));
   fireEvent.press(r.getByTestId('trim-close-button'));
-  expect(alertSpy).toHaveBeenCalledWith('편집한 내용을 버릴까요?', undefined, expect.any(Array));
+  expect(alertSpy).toHaveBeenCalledWith('편집한 내용을 버릴까요?', expect.any(String), expect.any(Array));
   expect(nav.goBack).not.toHaveBeenCalled();
   act(() => { buttons.find((b) => b.text === '버리기').onPress(); });
   expect(nav.goBack).toHaveBeenCalled();

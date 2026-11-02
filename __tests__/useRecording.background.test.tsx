@@ -16,6 +16,9 @@ const mockRecorder = {
   getStatus: jest.fn(() => ({ durationMillis: mockDurationMillis })),
 };
 
+const mockDeleteAudio = jest.fn();
+jest.mock('../lib/storage', () => ({ deleteAudioLocally: (uri: string) => mockDeleteAudio(uri) }));
+
 jest.mock('expo-audio', () => {
   const React = require('react');
   const listeners = new Set<() => void>();
@@ -112,5 +115,16 @@ describe('useRecording — 백그라운드 녹음', () => {
       await Promise.all([result.current.stopRecording(), result.current.stopRecording()]);
     });
     expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('녹음 도중 버리면 정지 후 녹음기 임시 파일을 지운다', async () => {
+    const { result } = renderHook(() => useRecording());
+    await startAndRecordFor(result, 3_000);
+    await act(async () => {
+      result.current.resetRecording();
+    });
+    expect(mockRecorder.stop).toHaveBeenCalled();
+    expect(mockDeleteAudio).toHaveBeenCalledWith('file:///bg.m4a');
+    expect(result.current.isRecording).toBe(false);
   });
 });

@@ -201,7 +201,7 @@ export default function TrimEditorScreen({ navigation, route }: Props) {
   dirtyRef.current = isDirty;
 
   const confirmDiscard = useCallback((onDiscard: () => void) => {
-    Alert.alert('편집한 내용을 버릴까요?', undefined, [
+    Alert.alert('편집한 내용을 버릴까요?', '저장하지 않은 잘라낼 구간은 사라져요.', [
       { text: '계속 편집', style: 'cancel' },
       {
         text: '버리기',

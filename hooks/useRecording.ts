@@ -331,12 +331,15 @@ export function useRecording(): UseRecordingReturn {
 
   const resetRecording = () => {
     if (phaseRef.current === 'recording' || phaseRef.current === 'paused') {
+      // 녹음 도중 버린 경우: 정지 후 녹음기 임시 파일도 지운다(안 지우면 캐시에 계속 쌓인다)
+      const uri = audioRecorder.uri;
       stoppingRef.current = true;
       audioRecorder
         .stop()
         .catch((error) => console.error('resetRecording: stop 실패', error))
         .finally(() => {
           stoppingRef.current = false;
+          if (uri) deleteAudioLocally(uri);
         });
     }
     updatePhase('idle');

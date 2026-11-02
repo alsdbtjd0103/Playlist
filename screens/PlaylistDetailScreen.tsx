@@ -693,6 +693,7 @@ const makeStyles = (colors: ColorTokens) =>
     },
     playButton: {
       alignSelf: 'stretch',
+      marginTop: spacing.md, // 헤더의 곡 수 표시와 붙어 보이지 않게
     },
     pillText: {
       fontFamily: fontFamily.bold,

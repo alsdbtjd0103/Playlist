@@ -137,12 +137,20 @@ const TAB_ICONS: Record<string, { on: keyof typeof Ionicons.glyphMap; off: keyof
   SettingsTab: { on: 'settings', off: 'settings-outline' },
 };
 
+const FULLSCREEN_SCREENS = new Set(['TrimEditor', 'Denoise']);
+
 // 화면 가장자리에서 띄운 둥근 탭바. 선택된 탭은 아이콘 뒤에 알약 모양 표시를 둔다.
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, scheme } = useTheme();
   const styles = useMemo(() => makeTabStyles(colors), [colors]);
   const activeColor = scheme === 'dark' ? colors.accent : colors.accentStrong;
+
+  // 편집기 같은 전체화면 작업 중에는 탭바·미니 플레이어를 숨긴다. Android 는 전체화면 모달이
+  // 탭바를 덮지 않아, 편집 도중 탭을 눌러 화면을 벗어나면 편집 내용이 사라질 수 있다.
+  const focusedTab = state.routes[state.index]?.state as { index?: number; routes?: { name: string }[] } | undefined;
+  const topScreen = focusedTab?.routes?.[focusedTab.index ?? 0]?.name;
+  if (topScreen && FULLSCREEN_SCREENS.has(topScreen)) return null;
 
   return (
     <View style={styles.wrap}>
