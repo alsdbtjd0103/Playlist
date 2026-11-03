@@ -52,3 +52,6 @@ modules/audio-denoise/android/src/main/cpp/prebuilt/
 modules/audio-denoise/android/src/main/cpp/include/df.h
 modules/audio-denoise/assets/*.tar.gz
 denoise-samples/
+
+# 로컬에 받아 둔 빌드 산출물(AAB/APK)
+build-artifacts/
