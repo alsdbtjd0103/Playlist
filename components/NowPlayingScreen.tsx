@@ -1,9 +1,8 @@
-import React, { useRef, useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Animated,
   PanResponder,
   Dimensions,
@@ -16,6 +15,9 @@ import AudioPlayer from './AudioPlayer';
 import { useTheme } from '../contexts/ThemeContext';
 import { ColorTokens, spacing, borderRadius, typography, fontFamily } from '../lib/theme';
 import { formatVersionNumber } from '../lib/versionLabel';
+import { AlbumArt } from './AlbumArt';
+import PressableScale from './PressableScale';
+import { useNavigation, StackActions } from '@react-navigation/native';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const DISMISS_THRESHOLD = 120;
@@ -36,7 +38,7 @@ export default function NowPlayingScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const insets = useSafeAreaInsets();
-  const [shuffleMode, setShuffleMode] = useState(false);
+  const navigation = useNavigation<any>();
 
   const isPlaylistMode = playlistState !== null;
 
@@ -47,8 +49,21 @@ export default function NowPlayingScreen() {
     setRepeatMode(modes[(currentIdx + 1) % 3]);
   };
 
-  const toggleShuffleMode = () => {
-    setShuffleMode(prev => !prev);
+  // 지금 재생 중인 곡의 상세 화면으로(별점·메모·대표 지정을 바로 하려고)
+  const goToSong = () => {
+    if (!currentTrack) return;
+    minimizePlayer();
+    const songId = currentTrack.song.id;
+    // 노래 탭 스택 위에 곡 상세를 쌓는다. navigate(탭, { screen }) 은 열려 있던 상세 화면을
+    // 다른 곡으로 바꿔 버리고(뒤로가기로 못 돌아감), 편집기의 확인 없이 화면을 지운다.
+    navigation.navigate('HomeTab');
+    const homeStack = navigation.getState?.()?.routes?.find((r: any) => r.name === 'HomeTab')?.state;
+    const top = homeStack?.routes?.[homeStack.index ?? 0];
+    if (!homeStack?.key) {
+      navigation.navigate('HomeTab', { screen: 'SongDetail', params: { songId } });
+    } else if (!(top?.name === 'SongDetail' && top?.params?.songId === songId)) {
+      navigation.dispatch({ ...StackActions.push('SongDetail', { songId }), target: homeStack.key });
+    }
   };
 
   // 애니메이션 효과
@@ -141,16 +156,30 @@ export default function NowPlayingScreen() {
 
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerButton} onPress={minimizePlayer}>
+        <PressableScale style={styles.headerButton} onPress={minimizePlayer} accessibilityLabel="플레이어 접기">
           <Ionicons name="chevron-down" size={28} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerButton} />
+        </PressableScale>
+        {isPlaylistMode && playlistState ? (
+          <Text style={styles.headerTitle}>
+            {playlistState.currentIndex + 1} / {playlistState.items.length}
+          </Text>
+        ) : (
+          <View />
+        )}
+        <PressableScale style={styles.headerButton} onPress={goToSong} accessibilityLabel="곡으로 이동" testID="now-playing-go-to-song">
+          <Ionicons name="musical-note-outline" size={24} color={colors.text} />
+        </PressableScale>
       </View>
 
       {/* 앨범 아트 */}
       <View style={styles.albumArtContainer}>
-        <View style={[styles.albumArt, { width: ALBUM_ART_SIZE, height: ALBUM_ART_SIZE }]}>
-          <Ionicons name="musical-notes" size={Math.min(120, ALBUM_ART_SIZE * 0.3)} color={colors.accent} />
+        <View style={styles.albumShadow}>
+          <AlbumArt
+            uri={currentTrack.song.artworkUrl}
+            size={ALBUM_ART_SIZE}
+            iconSize={Math.min(120, ALBUM_ART_SIZE * 0.3)}
+            borderRadius={28}
+          />
         </View>
       </View>
 
@@ -168,11 +197,6 @@ export default function NowPlayingScreen() {
           <Ionicons name="star" size={16} color={colors.star} />
           <Text style={styles.ratingText}>{currentTrack.version.rating}</Text>
         </View>
-        {isPlaylistMode && playlistState && (
-          <Text style={styles.trackIndicator}>
-            {playlistState.currentIndex + 1} / {playlistState.items.length}
-          </Text>
-        )}
       </View>
 
       {/* 오디오 플레이어 */}
@@ -186,8 +210,6 @@ export default function NowPlayingScreen() {
             onNext={playNext}
             repeatMode={playlistState?.repeatMode}
             onRepeatModeChange={cycleRepeatMode}
-            shuffleMode={shuffleMode}
-            onShuffleModeChange={toggleShuffleMode}
           />
         )}
       </View>
@@ -246,11 +268,13 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: spacing.lg,
   },
-  albumArt: {
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
+  albumShadow: {
+    borderRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
   },
   songInfo: {
     alignItems: 'center',
@@ -259,9 +283,9 @@ const makeStyles = (colors: ColorTokens) => StyleSheet.create({
     marginTop: spacing.md,
   },
   songTitle: {
-    fontFamily: typography.h1.fontFamily,
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontFamily: fontFamily.extrabold,
+    fontSize: 24,
+    letterSpacing: -0.4,
     color: colors.text,
     textAlign: 'center',
   },

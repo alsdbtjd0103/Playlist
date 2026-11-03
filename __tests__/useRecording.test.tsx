@@ -113,3 +113,28 @@ describe('useRecording — 일시정지/재개', () => {
     expect(result.current.isPaused).toBe(false);
   });
 });
+
+describe('useRecording — 녹음 중 화면 켜짐 유지', () => {
+  it('녹음을 시작하면 keep-awake 를 켜고, 정지하면 끈다', async () => {
+    const KeepAwake = require('expo-keep-awake');
+    const { result } = renderHook(() => useRecording());
+    expect(KeepAwake.activateKeepAwakeAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    expect(KeepAwake.activateKeepAwakeAsync).toHaveBeenCalledWith('recording');
+    expect(KeepAwake.deactivateKeepAwake).not.toHaveBeenCalled();
+
+    // 일시정지 중에도 계속 켜 둔다
+    act(() => {
+      result.current.pauseRecording();
+    });
+    expect(KeepAwake.deactivateKeepAwake).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.stopRecording();
+    });
+    expect(KeepAwake.deactivateKeepAwake).toHaveBeenCalledWith('recording');
+  });
+});

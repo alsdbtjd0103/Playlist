@@ -1,5 +1,6 @@
 import TrackPlayer, { Event } from 'react-native-track-player';
-import { skipWrapped } from './queueControl';
+import { skipWrapped, runQueueOp, skipPreviousOrRestart } from './queueControl';
+import { isRecordingActive } from '../lib/recordingState';
 
 /**
  * TrackPlayer의 백그라운드 재생을 위한 서비스
@@ -7,6 +8,8 @@ import { skipWrapped } from './queueControl';
  */
 export async function PlaybackService() {
   TrackPlayer.addEventListener(Event.RemotePlay, () => {
+    // 녹음 중 이어폰·잠금화면 재생 버튼: 반주가 녹음에 섞이거나 iOS 에서 마이크 입력이 끊긴다
+    if (isRecordingActive()) return;
     TrackPlayer.play();
   });
 
@@ -15,16 +18,13 @@ export async function PlaybackService() {
   });
 
   // 잠금화면·알림·이어폰의 다음/이전도 끝↔처음 순환 (skipToNext는 큐 끝에서 실패함)
+  // 앱의 큐 조작(플레이리스트 교체·순서 동기화)과 겹치지 않도록 같은 줄에서 실행한다
   TrackPlayer.addEventListener(Event.RemoteNext, () => {
-    skipWrapped(1).catch((e) => console.error('원격 다음 곡 실패:', e));
+    runQueueOp(() => skipWrapped(1)).catch((e) => console.error('원격 다음 곡 실패:', e));
   });
 
   TrackPlayer.addEventListener(Event.RemotePrevious, () => {
-    skipWrapped(-1).catch((e) => console.error('원격 이전 곡 실패:', e));
-  });
-
-  TrackPlayer.addEventListener(Event.RemoteJumpBackward, () => {
-    skipWrapped(-1).catch((e) => console.error('원격 이전 곡 실패:', e));
+    runQueueOp(() => skipPreviousOrRestart()).catch((e) => console.error('원격 이전 곡 실패:', e));
   });
 
   TrackPlayer.addEventListener(Event.RemoteStop, () => {

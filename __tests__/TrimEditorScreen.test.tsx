@@ -6,6 +6,10 @@ jest.mock('expo-audio', () => ({
   useAudioPlayer: () => ({ play: jest.fn(), pause: jest.fn(), seekTo: jest.fn(async () => {}) }),
   useAudioPlayerStatus: () => ({ currentTime: 0, duration: 10, playing: false, didJustFinish: false }),
 }));
+jest.mock('react-native-track-player', () => ({
+  __esModule: true,
+  default: { pause: jest.fn(async () => {}) },
+}));
 jest.mock('../lib/database', () => ({
   getVersion: jest.fn(),
   applyCutsToVersion: jest.fn(async () => {}),
@@ -31,6 +35,13 @@ const renderScreen = () =>
     </ThemeProvider>
   );
 
+// 저장 버튼 → 시트에서 옵션 선택
+const pressSaveOption = async (r: ReturnType<typeof renderScreen>, optionId: string) => {
+  await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
+  await waitFor(() => r.getByTestId(optionId));
+  await act(async () => { fireEvent.press(r.getByTestId(optionId)); });
+};
+
 beforeEach(() => {
   jest.clearAllMocks();
   (getVersion as jest.Mock).mockResolvedValue({
@@ -42,8 +53,8 @@ beforeEach(() => {
 it('cut 없이 저장하면 createEditedVersion([]) 호출(새 버전 저장 기본)', async () => {
   const r = renderScreen();
   await waitFor(() => r.getByTestId('trim-save-button'));
-  await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
-  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', []));
+  await pressSaveOption(r, 'trim-save-new');
+  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', [], 10));
   expect(nav.goBack).toHaveBeenCalled();
 });
 
@@ -53,7 +64,7 @@ it('구간 추가 → 저장 시 cut 1개가 저장된다', async () => {
   await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
   // 파형에 cut 구간이 하나 생김
   await waitFor(() => r.getByTestId('cut-0-region'));
-  await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
+  await pressSaveOption(r, 'trim-save-new');
   await waitFor(() => expect(createEditedVersion).toHaveBeenCalled());
   const cutsArg = (createEditedVersion as jest.Mock).mock.calls[0][1];
   expect(cutsArg).toHaveLength(1);
@@ -67,8 +78,8 @@ it('구간 추가 후 선택 삭제하면 다시 0개', async () => {
   await waitFor(() => r.getByTestId('cut-0-region'));
   // 추가 직후 선택 상태 → 삭제
   await act(async () => { fireEvent.press(r.getByTestId('trim-delete-cut-button')); });
-  await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
-  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', []));
+  await pressSaveOption(r, 'trim-save-new');
+  await waitFor(() => expect(createEditedVersion).toHaveBeenCalledWith('v1', [], 10));
 });
 
 it('네이티브 미가용이면 실제로 잘라 저장 버튼이 없다', async () => {
@@ -77,6 +88,8 @@ it('네이티브 미가용이면 실제로 잘라 저장 버튼이 없다', asyn
   await waitFor(() => r.getByTestId('trim-add-cut-button'));
   await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
   await waitFor(() => r.getByTestId('cut-0-region'));
+  await act(async () => { fireEvent.press(r.getByTestId('trim-save-button')); });
+  await waitFor(() => r.getByTestId('trim-save-new'));
   expect(r.queryByTestId('trim-render-button')).toBeNull();
 });
 
@@ -85,24 +98,47 @@ it('네이티브 가용 + cut 있으면 렌더 버튼 → renderCutsToFile + add
   const r = renderScreen();
   await waitFor(() => r.getByTestId('trim-add-cut-button'));
   await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
-  await waitFor(() => r.getByTestId('trim-render-button'));
-  await act(async () => { fireEvent.press(r.getByTestId('trim-render-button')); });
+  await waitFor(() => r.getByTestId('cut-0-region'));
+  await pressSaveOption(r, 'trim-render-button');
   await waitFor(() => expect(renderCutsToFile).toHaveBeenCalled());
   expect(addVersion).toHaveBeenCalled();
   expect(nav.goBack).toHaveBeenCalled();
 });
 
-it('덮어쓰기 확인 Alert에서 destructive 버튼 누르면 applyCutsToVersion 호출', async () => {
-  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
-    const confirm = (buttons || []).find((b: any) => b.style === 'destructive');
-    confirm?.onPress?.();
-  });
-
+it('이 버전에 적용은 확인 없이 applyCutsToVersion(길이 포함) 호출', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const r = renderScreen();
-  await waitFor(() => r.getByTestId('trim-overwrite-button'));
-  await act(async () => { fireEvent.press(r.getByTestId('trim-overwrite-button')); });
-  await waitFor(() => expect(applyCutsToVersion).toHaveBeenCalled());
+  await waitFor(() => r.getByTestId('trim-add-cut-button'));
+  await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
+  await waitFor(() => r.getByTestId('cut-0-region'));
+  await pressSaveOption(r, 'trim-overwrite-button');
+  await waitFor(() => expect(applyCutsToVersion).toHaveBeenCalledWith('v1', expect.any(Array), 10));
+  expect(alertSpy).not.toHaveBeenCalled();
   expect(nav.goBack).toHaveBeenCalled();
+  alertSpy.mockRestore();
+});
 
+it('편집 없이 닫으면 바로 나간다', async () => {
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const r = renderScreen();
+  await waitFor(() => r.getByTestId('trim-close-button'));
+  fireEvent.press(r.getByTestId('trim-close-button'));
+  expect(alertSpy).not.toHaveBeenCalled();
+  expect(nav.goBack).toHaveBeenCalled();
+  alertSpy.mockRestore();
+});
+
+it('편집 중 닫으면 확인 후 버리기를 눌러야 나간다', async () => {
+  let buttons: any[] = [];
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, b) => { buttons = b as any[]; });
+  const r = renderScreen();
+  await waitFor(() => r.getByTestId('trim-add-cut-button'));
+  await act(async () => { fireEvent.press(r.getByTestId('trim-add-cut-button')); });
+  await waitFor(() => r.getByTestId('cut-0-region'));
+  fireEvent.press(r.getByTestId('trim-close-button'));
+  expect(alertSpy).toHaveBeenCalledWith('편집한 내용을 버릴까요?', expect.any(String), expect.any(Array));
+  expect(nav.goBack).not.toHaveBeenCalled();
+  act(() => { buttons.find((b) => b.text === '버리기').onPress(); });
+  expect(nav.goBack).toHaveBeenCalled();
   alertSpy.mockRestore();
 });
